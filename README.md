@@ -52,7 +52,7 @@ the app anywhere other than your own machine.
 ```bash
 pytest -q
 ```
-There are 119 tests. They use a temporary database per test and never touch `bloodbank.db`.
+There are 139 tests. They use a temporary database per test and never touch `bloodbank.db`.
 
 ---
 
@@ -228,12 +228,23 @@ Running the script without `--reset` does nothing if the database already has da
 
 | Variable | Default |
 |---|---|
-| `BBMS_SECRET_KEY` | development value — **set this outside local demos** |
+| `APP_ENV` | `development`. Set to `production` on a real server to enable start-up safety checks |
+| `BBMS_SECRET_KEY` | development value. **Required in production:** with `APP_ENV=production` the app refuses to start if this is unset, the development value, or shorter than 32 characters |
 | `BBMS_DATABASE_URL` | `sqlite:///./bloodbank.db` |
 | `BBMS_SHELF_LIFE_DAYS` | `35` |
 | `BBMS_NEAR_EXPIRY_DAYS` | `7` |
 | `BBMS_SESSION_MAX_AGE` | `28800` (seconds) |
 | eligibility thresholds | see section 3 |
+
+**Production secret key.** The secret key signs login sessions, so anyone who knows it can forge a
+session. Generate a key and supply it through the server environment. Never commit it.
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+export APP_ENV=production
+export BBMS_SECRET_KEY='<generated value>'
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+Local development needs neither variable.
 
 ## 8. Database schema changes (migrations)
 `init_db()` runs on every start-up. It does two things:

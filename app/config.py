@@ -21,9 +21,45 @@ def _env(name: str, default, cast=str):
     return cast(raw)
 
 
+# Signs session cookies in local development only. Anyone who knows it can forge
+# a session, so production start-up refuses it (see `check_secret_key`).
+DEV_SECRET_KEY = "dev-only-insecure-secret-change-me"
+MIN_PRODUCTION_SECRET_LENGTH = 32
+
+
+class InsecureConfigurationError(RuntimeError):
+    """Raised at start-up when production settings are unsafe."""
+
+
+def is_production(app_env: str | None) -> bool:
+    return (app_env or "").strip().lower() in ("production", "prod")
+
+
+def check_secret_key(app_env: str | None, secret_key: str | None) -> None:
+    """Refuse to run in production with the development, blank or a short secret key.
+
+    Development (APP_ENV unset or anything other than production/prod) is never blocked.
+    """
+    if not is_production(app_env):
+        return
+    key = (secret_key or "").strip()
+    if key == DEV_SECRET_KEY or len(key) < MIN_PRODUCTION_SECRET_LENGTH:
+        problem = ("is set to the built-in development value" if key == DEV_SECRET_KEY
+                   else "is missing" if not key
+                   else f"is shorter than {MIN_PRODUCTION_SECRET_LENGTH} characters")
+        raise InsecureConfigurationError(
+            f"Refusing to start: APP_ENV=production but BBMS_SECRET_KEY {problem}. "
+            "This key signs login sessions; a known or weak key lets anyone forge a session. "
+            "Generate one with:  python -c \"import secrets; print(secrets.token_urlsafe(48))\"  "
+            "and set it in the server environment (e.g. BBMS_SECRET_KEY=<value>). "
+            "Keep it out of source control. For local development, unset APP_ENV."
+        )
+
+
 class Settings:
     app_name: str = "Blood Bank Management System"
-    secret_key: str = _env("SECRET_KEY", "dev-only-insecure-secret-change-me")
+    app_env: str = os.getenv("APP_ENV", "development")
+    secret_key: str = _env("SECRET_KEY", DEV_SECRET_KEY)
     database_url: str = _env("DATABASE_URL", f"sqlite:///{(BASE_DIR / 'bloodbank.db').as_posix()}")
     session_max_age_seconds: int = _env("SESSION_MAX_AGE", 8 * 60 * 60, int)
 

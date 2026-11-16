@@ -12,13 +12,16 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.config import BASE_DIR, settings
+from app.config import BASE_DIR, check_secret_key, settings
 from app.database import init_db
 from app.routers import api, auth, dashboard, donations, donors, inventory, issues, reports, requests, users
 from app.web import CSRFError, Forbidden, NotAuthenticated, csrf_protect, redirect, render
 
 
 def create_app(init: bool = True) -> FastAPI:
+    # Fail fast (before serving anything) if production uses the dev/weak secret key.
+    check_secret_key(settings.app_env, settings.secret_key)
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         if init:
