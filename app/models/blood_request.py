@@ -20,6 +20,8 @@ class BloodRequest(Base):
     __table_args__ = (CheckConstraint("units_required >= 1", name="ck_request_units_positive"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # Owning facility (Phase 3). Required and immutable: enforced by database triggers (migration v3).
+    facility_id: Mapped[int | None] = mapped_column(ForeignKey("facilities.id"), index=True)
     patient_name: Mapped[str] = mapped_column(String(120))
     patient_age: Mapped[int]
     patient_gender: Mapped[Gender] = mapped_column(db_enum(Gender))
@@ -74,6 +76,8 @@ class Issue(Base):
     __tablename__ = "issues"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # Owning facility (Phase 3). Required and immutable: enforced by database triggers (migration v3).
+    facility_id: Mapped[int | None] = mapped_column(ForeignKey("facilities.id"), index=True)
     request_id: Mapped[int] = mapped_column(ForeignKey("blood_requests.id"), index=True)
     # unique=True: a bag can never be issued twice, enforced by the database.
     blood_unit_id: Mapped[int] = mapped_column(ForeignKey("blood_units.id"), unique=True)

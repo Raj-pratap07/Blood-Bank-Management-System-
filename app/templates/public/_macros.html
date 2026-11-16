@@ -1,0 +1,38 @@
+{% macro phones(f, compact=false) -%}
+{% for c in f.phones %}
+<div class="pub-phone {% if compact %}small{% endif %}">
+  <a href="{{ c.href }}" class="pub-phone-number"><i class="bi bi-telephone"></i> {{ c.value }}</a>
+  {% if c.label %}<span class="text-muted">· {{ c.label }}</span>{% endif %}
+  {% if c.confirmed %}<span class="pub-chip pub-chip-ok" title="{{ c.status_text }}"><i class="bi bi-patch-check-fill"></i> Confirmed</span>
+  {% else %}<span class="pub-chip pub-chip-warn" title="{{ c.status_text }}"><i class="bi bi-exclamation-circle"></i> Not yet confirmed</span>{% endif %}
+</div>
+{% endfor %}
+{%- endmacro %}
+
+{% macro location_chip(f) -%}
+{% if f.location_verified %}<span class="pub-chip pub-chip-ok"><i class="bi bi-geo-alt-fill"></i> Location verified</span>
+{% else %}<span class="pub-chip pub-chip-muted"><i class="bi bi-geo-alt"></i> Location not yet verified · no map pin</span>{% endif %}
+{%- endmacro %}
+
+{% macro directions(f, size="sm") -%}
+{% if f.directions %}
+<div class="d-flex flex-wrap gap-2">
+  <a class="btn btn-{{ size }} btn-bb" href="{{ f.directions.google }}" target="_blank" rel="noopener"><i class="bi bi-sign-turn-right"></i> Google Maps</a>
+  <a class="btn btn-{{ size }} btn-outline-secondary" href="{{ f.directions.openstreetmap }}" target="_blank" rel="noopener"><i class="bi bi-map"></i> OpenStreetMap</a>
+</div>
+{% elif f.address_search_url %}
+<a class="btn btn-{{ size }} btn-outline-secondary" href="{{ f.address_search_url }}" target="_blank" rel="noopener"><i class="bi bi-search"></i> Search this address on OpenStreetMap</a>
+{% endif %}
+{%- endmacro %}
+
+{% macro ownership(value) -%}
+<span class="pub-tag">{{ {'government': 'Government', 'charitable': 'Charitable', 'private': 'Private', 'unknown': 'Ownership not recorded'}[value] }}</span>
+{%- endmacro %}
+
+{% macro status_chip(c) -%}
+{% set v = c.status.value if c.status else none %}
+{% if v == 'available' %}<span class="pub-chip pub-chip-ok"><i class="bi bi-check-circle-fill"></i> Available{% if c.units is not none %} · {{ c.units }} unit{{ '' if c.units == 1 else 's' }}{% endif %}</span>
+{% elif v == 'low' %}<span class="pub-chip pub-chip-warn"><i class="bi bi-exclamation-circle-fill"></i> Low{% if c.units is not none %} · {{ c.units }} unit{{ '' if c.units == 1 else 's' }}{% endif %}</span>
+{% elif v == 'not_available' %}<span class="pub-chip pub-chip-muted"><i class="bi bi-x-circle"></i> Not available</span>
+{% else %}<span class="pub-chip pub-chip-muted">Not tracked</span>{% endif %}
+{%- endmacro %}

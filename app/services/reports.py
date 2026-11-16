@@ -1,4 +1,7 @@
-"""Read-only aggregates for the dashboard, JSON API and reports."""
+"""Read-only aggregates for the dashboard, JSON API and reports.
+
+Every function takes the caller's facility_id and only ever reads that facility's rows.
+"""
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
@@ -19,39 +22,35 @@ from app.models import (
 from app.models.enums import OPEN_REQUEST_STATUSES
 
 
-def dashboard_counts(db: Session, on: date | None = None) -> dict:
+def dashboard_counts(db: Session, facility_id: int, on: date | None = None) -> dict:
     from app.config import settings
 
     on = on or date.today()
     near = on + timedelta(days=settings.near_expiry_days)
 
-    def count(stmt):
-        return db.scalar(stmt) or 0
+    def count(model, *conds):
+        return db.scalar(select(func.count()).select_from(model).where(model.facility_id == facility_id, *conds)) or 0
 
     return {
-        "donors": count(select(func.count()).select_from(Donor)),  # total registered (incl. inactive)
-        "available": count(select(func.count()).select_from(BloodUnit).where(
-            BloodUnit.status == UnitStatus.AVAILABLE, BloodUnit.expires_on >= on)),
-        "reserved": count(select(func.count()).select_from(BloodUnit).where(BloodUnit.status == UnitStatus.RESERVED)),
-        "quarantine": count(select(func.count()).select_from(BloodUnit).where(
-            BloodUnit.status == UnitStatus.QUARANTINE)),
-        "near_expiry": count(select(func.count()).select_from(BloodUnit).where(
-            BloodUnit.status == UnitStatus.AVAILABLE, BloodUnit.expires_on >= on, BloodUnit.expires_on <= near)),
-        "pending_requests": count(select(func.count()).select_from(BloodRequest).where(
-            BloodRequest.status == RequestStatus.PENDING)),
-        "open_requests": count(select(func.count()).select_from(BloodRequest).where(
-            BloodRequest.status.in_(OPEN_REQUEST_STATUSES))),
-        "pending_screening": count(select(func.count()).select_from(Donation).where(
-            Donation.status == DonationStatus.QUARANTINE)),
+        "donors": count(Donor),  # total registered (incl. inactive)
+        "available": count(BloodUnit, BloodUnit.status == UnitStatus.AVAILABLE, BloodUnit.expires_on >= on),
+        "reserved": count(BloodUnit, BloodUnit.status == UnitStatus.RESERVED),
+        "quarantine": count(BloodUnit, BloodUnit.status == UnitStatus.QUARANTINE),
+        "near_expiry": count(BloodUnit, BloodUnit.status == UnitStatus.AVAILABLE, BloodUnit.expires_on >= on,
+                             BloodUnit.expires_on <= near),
+        "pending_requests": count(BloodRequest, BloodRequest.status == RequestStatus.PENDING),
+        "open_requests": count(BloodRequest, BloodRequest.status.in_(OPEN_REQUEST_STATUSES)),
+        "pending_screening": count(Donation, Donation.status == DonationStatus.QUARANTINE),
     }
 
 
-def recent_donations(db: Session, limit: int = 8) -> list[Donation]:
-    return list(db.scalars(select(Donation).options(selectinload(Donation.donor))
+def recent_donations(db: Session, facility_id: int, limit: int = 8) -> list[Donation]:
+    return list(db.scalars(select(Donation).where(Donation.facility_id == facility_id)
+                           .options(selectinload(Donation.donor))
                            .order_by(Donation.donation_date.desc(), Donation.id.desc()).limit(limit)))
 
 
-def donations_by_month(db: Session, months: int = 6, on: date | None = None) -> dict:
+def donations_by_month(db: Session, facility_id: int, months: int = 6, on: date | None = None) -> dict:
     on = on or date.today()
     # first day of the month `months-1` months ago
     y, m = on.year, on.month - (months - 1)
@@ -61,7 +60,7 @@ def donations_by_month(db: Session, months: int = 6, on: date | None = None) -> 
     start = date(y, m, 1)
     rows = dict(db.execute(
         select(func.strftime("%Y-%m", Donation.donation_date), func.count())
-        .where(Donation.donation_date >= start)
+        .where(Donation.facility_id == facility_id, Donation.donation_date >= start)
         .group_by(func.strftime("%Y-%m", Donation.donation_date))
     ).all())
     labels, values = [], []
@@ -73,8 +72,9 @@ def donations_by_month(db: Session, months: int = 6, on: date | None = None) -> 
     return {"labels": labels, "values": values}
 
 
-def requests_by_status(db: Session) -> dict:
-    rows = dict(db.execute(select(BloodRequest.status, func.count()).group_by(BloodRequest.status)).all())
+def requests_by_status(db: Session, facility_id: int) -> dict:
+    rows = dict(db.execute(select(BloodRequest.status, func.count())
+                           .where(BloodRequest.facility_id == facility_id).group_by(BloodRequest.status)).all())
     return {"labels": [s.value.replace("_", " ").title() for s in RequestStatus],
             "values": [rows.get(s, 0) for s in RequestStatus]}
 
@@ -84,8 +84,9 @@ def _range(start: date | None, end: date | None) -> tuple[datetime | None, datet
             datetime.combine(end, time.max) if end else None)
 
 
-def donation_report(db: Session, start: date | None, end: date | None):
-    stmt = select(Donation).options(selectinload(Donation.donor), selectinload(Donation.units))
+def donation_report(db: Session, facility_id: int, start: date | None, end: date | None):
+    stmt = (select(Donation).where(Donation.facility_id == facility_id)
+            .options(selectinload(Donation.donor), selectinload(Donation.units)))
     if start:
         stmt = stmt.where(Donation.donation_date >= start)
     if end:
@@ -96,9 +97,10 @@ def donation_report(db: Session, start: date | None, end: date | None):
     return rows, totals
 
 
-def request_report(db: Session, start: date | None, end: date | None):
+def request_report(db: Session, facility_id: int, start: date | None, end: date | None):
     s, e = _range(start, end)
-    stmt = select(BloodRequest).options(selectinload(BloodRequest.issues), selectinload(BloodRequest.reserved_units))
+    stmt = (select(BloodRequest).where(BloodRequest.facility_id == facility_id)
+            .options(selectinload(BloodRequest.issues), selectinload(BloodRequest.reserved_units)))
     if s:
         stmt = stmt.where(BloodRequest.created_at >= s)
     if e:
@@ -110,9 +112,10 @@ def request_report(db: Session, start: date | None, end: date | None):
     return rows, totals
 
 
-def issue_report(db: Session, start: date | None, end: date | None):
+def issue_report(db: Session, facility_id: int, start: date | None, end: date | None):
     s, e = _range(start, end)
-    stmt = select(Issue).options(selectinload(Issue.blood_unit), selectinload(Issue.request),
+    stmt = select(Issue).where(Issue.facility_id == facility_id).options(
+        selectinload(Issue.blood_unit), selectinload(Issue.request),
                                  selectinload(Issue.issued_by))
     if s:
         stmt = stmt.where(Issue.issued_at >= s)

@@ -278,12 +278,12 @@ class TestPasswordBytes:
 # ======================================================== C4: phone normalisation
 class TestPhoneNormalisation:
     @pytest.mark.parametrize("variant", ["98765 12345", "98765-12345", " 9876512345 "])
-    def test_formatted_duplicate_is_detected(self, db, variant):
+    def test_formatted_duplicate_is_detected(self, db, users, variant):
         base = dict(full_name="Phone Person", gender="female", date_of_birth="1992-02-02",
                     blood_group="B+", weight_kg=55)
-        donor_svc.create_donor(db, DonorIn(phone="9876512345", **base))
+        donor_svc.create_donor(db, DonorIn(phone="9876512345", **base), users["staff"])
         with pytest.raises(ServiceError, match="already registered"):
-            donor_svc.create_donor(db, DonorIn(phone=variant, **base))
+            donor_svc.create_donor(db, DonorIn(phone=variant, **base), users["staff"])
 
     def test_international_prefix_kept(self):
         d = DonorIn(full_name="Intl Person", gender="male", date_of_birth="1990-01-01", blood_group="O+",
@@ -356,3 +356,36 @@ def test_suite_never_points_at_real_database():
     real = (BASE_DIR / "bloodbank.db").as_posix()
     assert real not in settings.database_url
     assert settings.app_env == "test"
+
+
+
+def test_seed_reset_rebuilds_a_fully_migrated_database(tmp_path):
+    """Regression (found in Phase 4 browser testing): --reset on an existing, migrated database with
+    availability publications failed on foreign keys, and did not reset the schema version."""
+    env = {k: v for k, v in os.environ.items() if k != "APP_ENV"}
+    db_path = (tmp_path / "reset.db").as_posix()
+    env["BBMS_DATABASE_URL"] = f"sqlite:///{db_path}"
+    env["BBMS_BACKUP_DIR"] = str(tmp_path / "backups")
+    run = lambda *a: subprocess.run([sys.executable, "-m", "scripts.seed", *a], cwd=BASE_DIR, env=env,  # noqa: E731
+                                    capture_output=True, text=True, timeout=300)
+    assert run().returncode == 0
+    e = make_engine(f"sqlite:///{db_path}")
+    with e.begin() as c:   # simulate a published snapshot (dependent rows in a child table)
+        uid = c.execute(text("SELECT id FROM users WHERE role = 'medical_officer'")).scalar()
+        c.execute(text("INSERT INTO availability_publications (facility_id, published_by_id, published_at, valid_until) "
+                       "VALUES (1, :u, '2026-01-01 00:00:00', '2026-01-02 00:00:00')"), {"u": uid})
+        c.execute(text("INSERT INTO availability_entries (publication_id, blood_group, product, units) "
+                       "VALUES (1, 'A+', 'whole_blood', 1)"))
+    e.dispose()
+    r = run("--reset", "--confirm-reset", "reset.db")
+    assert r.returncode == 0, r.stderr[-500:]
+    backups = list((tmp_path / "backups").glob("*.db"))
+    assert len(backups) == 1                                   # verified backup taken before the drop
+    e = make_engine(f"sqlite:///{db_path}")
+    with e.connect() as c:
+        from app.migrations import SCHEMA_VERSION
+        assert c.execute(text("PRAGMA user_version")).scalar() == SCHEMA_VERSION
+        assert c.execute(text("SELECT count(*) FROM facilities WHERE is_demo = 1")).scalar() == 1
+        assert c.execute(text("SELECT count(*) FROM availability_publications")).scalar() == 0
+        assert c.execute(text("SELECT count(*) FROM sqlite_master WHERE type = 'trigger'")).scalar() >= 35
+    e.dispose()

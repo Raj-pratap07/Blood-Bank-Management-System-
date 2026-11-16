@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}Public availability{% endblock %}
+{% block content %}
+{{ m.page_header("Public availability", facility.display_name ~ " · what the public can see, and when") }}
+
+<div class="alert alert-secondary small">
+  <i class="bi bi-shield-lock"></i> Internal stock is <strong>never</strong> public automatically. An administrator or medical
+  officer publishes a summary (counts per blood group). It contains no donor, patient, request or bag details, and it
+  expires after {{ validity_hours }} h. The public figure is never higher than your current eligible stock.
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-6">
+    <div class="card h-100"><div class="card-header">Internal eligible stock (now)</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr><th class="ps-3">Group</th><th class="text-end pe-3">Whole blood bags ready to issue</th></tr></thead>
+          <tbody>{% for g in groups %}
+            <tr><td class="ps-3">{{ m.group(g) }}</td><td class="text-end pe-3 fw-semibold">{{ counts[(g, tracked[0])] }}</td></tr>
+          {% endfor %}</tbody>
+        </table>
+      </div>
+      <div class="card-footer bg-white small text-muted">Counts only <em>available, unexpired</em> bags. Quarantined (awaiting
+        screening), reserved, issued, expired and discarded bags are excluded.</div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100"><div class="card-header">What the public sees</div><div class="card-body">
+      {% if facility.stock_visibility.value == 'hidden' %}
+        <p class="mb-2"><span class="badge text-bg-secondary">Off</span> Public availability is switched off.</p>
+      {% elif state == 'current' %}
+        <p class="mb-1"><span class="badge text-bg-success">Published</span> {{ latest.published_at | ist }} by {{ latest.published_by.full_name }}</p>
+        <p class="small text-muted">Shown until {{ latest.valid_until | ist }} · {{ facility.stock_visibility.value | label }} display</p>
+      {% elif state == 'stale' %}
+        <p class="mb-1"><span class="badge text-bg-warning">Expired</span> Last published {{ latest.published_at | ist }}. The public sees "not recently updated".</p>
+      {% elif state == 'withdrawn' %}
+        <p class="mb-1"><span class="badge text-bg-secondary">Withdrawn</span> {{ latest.withdrawn_at | ist }} by {{ latest.withdrawn_by.full_name }}.</p>
+      {% else %}
+        <p class="mb-1"><span class="badge text-bg-secondary">Never published</span></p>
+      {% endif %}
+      {% if not facility.is_listed %}<p class="small text-muted mb-2">Note: this facility is not listed in the public directory, so nothing is shown publicly even when published.</p>{% endif %}
+      {% if user.can_authorize %}
+      <div class="d-flex flex-wrap gap-2 mt-2">
+        {% if facility.stock_visibility.value != 'hidden' %}
+        <form method="post" action="/availability/publish" data-confirm="Publish the current eligible stock summary to the public?">
+          {{ m.csrf() }}<button class="btn btn-bb" type="submit"><i class="bi bi-broadcast"></i> {{ 'Refresh publication' if state == 'current' else 'Publish now' }}</button></form>
+        {% endif %}
+        {% if state in ('current', 'stale') %}
+        <form method="post" action="/availability/withdraw" data-confirm="Withdraw the public availability?">
+          {{ m.csrf() }}<button class="btn btn-outline-secondary" type="submit">Withdraw</button></form>
+        {% endif %}
+      </div>
+      {% else %}
+      <p class="small text-muted mb-0"><i class="bi bi-lock"></i> Only an administrator or medical officer can publish.</p>
+      {% endif %}
+    </div></div>
+  </div>
+</div>
+
+{% if user.is_admin %}
+<div class="card mb-3"><div class="card-header">Settings (administrator)</div><div class="card-body">
+  <form method="post" action="/availability/settings" class="row g-2 align-items-end">
+    {{ m.csrf() }}
+    <div class="col-md-5">
+      <label class="form-label" for="vis">Public display</label>
+      <select class="form-select" id="vis" name="stock_visibility">
+        {% for v in visibilities %}<option value="{{ v.value }}" {% if facility.stock_visibility == v %}selected{% endif %}>
+          {{ {'hidden': 'Off: never show availability', 'banded': 'Level: Available / Low (1-' ~ low_max ~ ') / Not available',
+              'exact': 'Exact number of bags'}[v.value] }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="hrs">Valid for (hours, max {{ max_hours }})</label>
+      <input class="form-control" id="hrs" name="stock_max_age_hours" type="number" min="1" max="{{ max_hours }}" value="{{ validity_hours }}">
+    </div>
+    <div class="col-md-2 d-grid"><button class="btn btn-outline-secondary" type="submit">Save settings</button></div>
+  </form>
+</div></div>
+{% endif %}
+
+<div class="card"><div class="card-header">Publication history</div>
+  <div class="table-responsive"><table class="table table-sm mb-0">
+    <thead><tr><th class="ps-3">Published</th><th>By</th><th>Valid until</th><th class="pe-3">Withdrawn</th></tr></thead>
+    <tbody>{% for p in history %}
+      <tr><td class="ps-3">{{ p.published_at | ist }}</td><td>{{ p.published_by.full_name }}</td><td>{{ p.valid_until | ist }}</td>
+          <td class="pe-3">{% if p.withdrawn_at %}{{ p.withdrawn_at | ist }} by {{ p.withdrawn_by.full_name }}{% else %}—{% endif %}</td></tr>
+    {% else %}{{ m.empty(4, "Nothing published yet.") }}{% endfor %}</tbody>
+  </table></div>
+</div>
+{% endblock %}

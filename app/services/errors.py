@@ -17,3 +17,7 @@ class InventoryError(ServiceError):
 
 class EligibilityError(ServiceError):
     pass
+
+
+class RecordNotFound(ServiceError):
+    """Missing OR belonging to another facility (deliberately indistinguishable)."""

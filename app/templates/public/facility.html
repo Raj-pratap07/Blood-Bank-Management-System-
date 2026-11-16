@@ -1,0 +1,119 @@
+{% extends "public/base.html" %}
+{% import "public/_macros.html" as p %}
+{% block title %}{{ f.name }}{% endblock %}
+{% block description %}{{ f.name }}, {{ f.address }}. Sourced contact details and verification status.{% endblock %}
+{% block head %}{% if f.location_verified %}{% include "public/_leaflet.html" %}{% endif %}{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <nav aria-label="breadcrumb"><ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="/find">Blood banks in Haldwani</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ f.name }}</li></ol></nav>
+
+  <header class="mb-4">
+    <h1 class="h3 mb-1">{{ f.name }}</h1>
+    {% if f.official_name and f.official_name != f.name %}<div class="text-muted">Official name: {{ f.official_name }}</div>{% endif %}
+    {% if f.aliases %}<div class="small text-muted">Also listed as: {{ f.aliases | join(', ') }}</div>{% endif %}
+    <div class="d-flex flex-wrap gap-1 mt-2">
+      {{ p.ownership(f.ownership) }}
+      <span class="pub-chip pub-chip-ok"><i class="bi bi-patch-check-fill"></i> {{ f.identity_text }}</span>
+      {{ p.location_chip(f) }}
+    </div>
+  </header>
+
+  <div class="row g-4">
+    <div class="col-lg-7">
+      <section class="pub-panel mb-4">
+        <h2 class="h6 pub-panel-title"><i class="bi bi-telephone"></i> Contact</h2>
+        {% if f.phones %}{{ p.phones(f) }}{% else %}<p class="small text-muted mb-0">No public phone number recorded.</p>{% endif %}
+        {% for c in f.contacts if c.kind != 'phone' %}
+        <div class="pub-phone"><a href="{{ c.href }}" {% if c.kind == 'website' %}target="_blank" rel="noopener"{% endif %}>
+          <i class="bi bi-{{ 'envelope' if c.kind == 'email' else 'globe' }}"></i> {{ c.value }}</a>
+          {% if c.confirmed %}<span class="pub-chip pub-chip-ok">Confirmed</span>{% else %}<span class="pub-chip pub-chip-warn">Not yet confirmed</span>{% endif %}</div>
+        {% endfor %}
+        <p class="small text-muted mt-2 mb-0">Numbers marked <em>not yet confirmed</em> come from the source listed below
+          but haven't been checked directly yet.</p>
+      </section>
+
+      <section class="pub-panel mb-4" id="availability">
+        <h2 class="h6 pub-panel-title"><i class="bi bi-clipboard2-pulse"></i> Blood availability</h2>
+        {% if availability.is_current %}
+          <p class="small mb-2"><span class="pub-chip pub-chip-ok"><i class="bi bi-clipboard2-check"></i> Published by the blood bank</span>
+            Updated <strong>{{ availability.published_at | ist }}</strong> · shown until {{ availability.valid_until | ist }}</p>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-2 pub-avail-table">
+              <thead><tr><th>Group</th><th>Whole blood</th></tr></thead>
+              <tbody>
+              {% for g in groups %}{% set c = availability.cell(g) %}
+                <tr><td class="fw-semibold">{{ g }}</td><td>{{ p.status_chip(c) }}</td></tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <p class="small text-muted mb-1">Other components (PRBC, FFP, platelets, cryoprecipitate) are not tracked here. Please ask the blood bank.</p>
+          <div class="pub-availability small mb-0"><i class="bi bi-exclamation-triangle"></i> {{ notice }}</div>
+        {% else %}
+          <div class="pub-availability mb-0">
+            {% if availability.state == 'stale' %}
+            <p class="small mb-1"><strong>Not recently updated.</strong> The last figures published by this blood bank
+              ({{ availability.published_at | ist }}) have expired, so they are no longer shown.</p>
+            {% else %}
+            <p class="small mb-1"><strong>Not published.</strong> This blood bank does not currently publish its
+              availability on Haldwani BloodLink.</p>
+            {% endif %}
+            <p class="small text-muted mb-0">Call the blood bank before travelling. We never estimate or guess stock levels.
+              {% if f.eraktkosh_code %}e-RaktKosh centre code: <strong>{{ f.eraktkosh_code }}</strong>.{% endif %}
+              <a href="{{ eraktkosh_url }}" target="_blank" rel="noopener">Open e-RaktKosh</a></p>
+          </div>
+        {% endif %}
+      </section>
+
+      <section class="pub-panel mb-4">
+        <h2 class="h6 pub-panel-title"><i class="bi bi-building"></i> Address &amp; details</h2>
+        <dl class="row small mb-0">
+          <dt class="col-sm-4">Address</dt><dd class="col-sm-8">{{ f.address }}</dd>
+          {% if f.parent_hospital %}<dt class="col-sm-4">Hospital</dt><dd class="col-sm-8">{{ f.parent_hospital }}</dd>{% endif %}
+          <dt class="col-sm-4">Services</dt><dd class="col-sm-8">
+            Component separation: {{ {None: 'not recorded', True: 'yes', False: 'no'}[f.facility.has_component_separation] }} ·
+            Apheresis: {{ {None: 'not recorded', True: 'yes', False: 'no'}[f.facility.has_apheresis] }}
+            <div class="text-muted">{{ f.services_text }}</div></dd>
+          <dt class="col-sm-4">Identity</dt><dd class="col-sm-8">{{ f.identity_text }}</dd>
+        </dl>
+      </section>
+    </div>
+
+    <div class="col-lg-5">
+      <section class="pub-panel mb-4">
+        <h2 class="h6 pub-panel-title"><i class="bi bi-geo-alt"></i> Location &amp; directions</h2>
+        {% if f.location_verified %}
+          <div id="map" class="pub-map pub-map-small mb-3" role="region" aria-label="Map showing {{ f.name }}"
+               data-tile-url="{{ map.tile_url }}" data-attribution="{{ map.attribution }}"
+               data-center="{{ map.center | tojson }}" data-zoom="{{ map.zoom }}" data-single="1"></div>
+          <p class="small text-muted">{{ f.location_text }}</p>
+        {% else %}
+          <div class="pub-empty pub-empty-sm mb-3"><i class="bi bi-geo-alt"></i>
+            <p class="small mb-0 mt-1">This location hasn't been verified yet, so it isn't shown on the map.</p></div>
+        {% endif %}
+        {{ p.directions(f, "md") }}
+        {% if f.directions %}<p class="small text-muted mt-2 mb-0">Directions open in Google Maps or OpenStreetMap; this site does no routing.</p>
+        {% else %}<p class="small text-muted mt-2 mb-0">Directions will be offered once the location is verified.</p>{% endif %}
+      </section>
+
+      <section class="pub-panel mb-4">
+        <h2 class="h6 pub-panel-title"><i class="bi bi-journal-check"></i> Sources</h2>
+        <ul class="list-unstyled small mb-0">
+        {% for e in f.evidence %}
+          <li class="mb-2"><span class="pub-tag">{{ e.type }}</span>
+            {% if e.url %}<a href="{{ e.url }}" target="_blank" rel="noopener nofollow">{{ e.title }}</a>{% else %}{{ e.title }}{% endif %}
+            <span class="text-muted">· {{ e.date | d }}</span></li>
+        {% endfor %}
+        </ul>
+      </section>
+    </div>
+  </div>
+
+  <div class="pub-emergency mt-2"><i class="bi bi-info-circle-fill"></i>
+    <div class="small">Details can change. <strong>Call before travelling.</strong> Spotted an error? Information is
+      re-verified regularly; see <a href="/find/about-data">how we verify</a>.</div></div>
+</div>
+{% endblock %}
+{% block scripts %}{% if f.location_verified %}{% include "public/_map_scripts.html" %}{% endif %}{% endblock %}

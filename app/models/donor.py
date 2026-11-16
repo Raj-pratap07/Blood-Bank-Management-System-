@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String, Text
+from sqlalchemy import ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -16,13 +16,17 @@ if TYPE_CHECKING:
 
 class Donor(Base):
     __tablename__ = "donors"
+    # The same person may register at several blood banks: phone is unique per facility.
+    __table_args__ = (Index("ux_donors_facility_phone", "facility_id", "phone", unique=True),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # Owning facility (Phase 3). Required and immutable: enforced by database triggers (migration v3).
+    facility_id: Mapped[int | None] = mapped_column(ForeignKey("facilities.id"), index=True)
     full_name: Mapped[str] = mapped_column(String(120), index=True)
     gender: Mapped[Gender] = mapped_column(db_enum(Gender))
     date_of_birth: Mapped[date]
     blood_group: Mapped[BloodGroup] = mapped_column(db_enum(BloodGroup), index=True)
-    phone: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    phone: Mapped[str] = mapped_column(String(20), index=True)
     email: Mapped[str | None] = mapped_column(String(120))
     address: Mapped[str | None] = mapped_column(Text)
     city: Mapped[str | None] = mapped_column(String(80))

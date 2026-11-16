@@ -31,8 +31,9 @@ PASSWORD = "Password@123"
 @pytest.fixture()
 def engine(tmp_path):
     eng = make_engine(f"sqlite:///{(tmp_path / 'test.db').as_posix()}")
-    import app.models  # noqa: F401
-    Base.metadata.create_all(eng)
+    from app.database import init_db
+
+    init_db(eng)  # same path as production start-up: create_all + migrations (triggers, demo facility)
     yield eng
     eng.dispose()
 
@@ -49,12 +50,25 @@ def db(SessionTest):
     s.close()
 
 
+def _demo_facility_id(db) -> int:
+    from app.models import Facility
+    return db.query(Facility.id).filter(Facility.is_demo.is_(True)).scalar()
+
+
+@pytest.fixture()
+def fid(users) -> int:
+    """Facility of the standard test users (the fictional demo facility)."""
+    return users["staff"].facility_id
+
+
 @pytest.fixture()
 def users(db):
     hashed = hash_password(PASSWORD)
     out = {}
     for role in Role:
-        u = User(username=role.value.replace("_", ""), full_name=f"Test {role.label}", role=role, password_hash=hashed)
+        fid = None if role == Role.PLATFORM_ADMIN else _demo_facility_id(db)
+        u = User(username=role.value.replace("_", ""), full_name=f"Test {role.label}", role=role,
+                 password_hash=hashed, facility_id=fid)
         db.add(u)
         out[role.value] = u
     db.commit()
@@ -65,12 +79,12 @@ _phone = iter(range(9000000000, 9999999999))
 
 
 @pytest.fixture()
-def make_donor(db):
-    def _make(group=BloodGroup.O_POS, gender=Gender.MALE, age=30, weight=65.0, **kw):
+def make_donor(db, users):
+    def _make(group=BloodGroup.O_POS, gender=Gender.MALE, age=30, weight=65.0, actor=None, **kw):
         dob = date.today().replace(year=date.today().year - age) - timedelta(days=10)
         data = DonorIn(full_name=kw.pop("name", "Test Donor"), gender=gender, date_of_birth=dob,
                        blood_group=group, phone=str(next(_phone)), weight_kg=weight, **kw)
-        return donor_svc.create_donor(db, data)
+        return donor_svc.create_donor(db, data, actor or users["staff"])
     return _make
 
 

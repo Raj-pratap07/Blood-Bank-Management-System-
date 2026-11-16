@@ -169,6 +169,23 @@ class UserIn(FormModel):
     password: Password
 
 
+class OnboardIn(FormModel):
+    """Platform onboarding: no password is set by the platform administrator."""
+    username: Annotated[str, StringConstraints(strip_whitespace=True, to_lower=True, pattern=r"^[a-z0-9_.]{3,50}$")]
+    full_name: Name
+
+
+class SetupIn(FormModel):
+    new_password: Password
+    confirm_password: str
+
+    @model_validator(mode="after")
+    def _match(self) -> SetupIn:
+        if self.new_password != self.confirm_password:
+            raise ValueError("Passwords do not match.")
+        return self
+
+
 class PasswordChangeIn(FormModel):
     current_password: str = ""
     new_password: Password

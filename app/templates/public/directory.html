@@ -1,0 +1,127 @@
+{% extends "public/base.html" %}
+{% import "public/_macros.html" as p %}
+{% block title %}Blood banks in Haldwani{% endblock %}
+{% block head %}{% include "public/_leaflet.html" %}{% endblock %}
+{% block content %}
+<div class="container-fluid pub-dir">
+  <div class="row g-0">
+    {# ------------------------------------------------------------ list column #}
+    <div class="col-lg-5 col-xl-4 pub-dir-list order-2 order-lg-1">
+      <div class="p-3 p-lg-4">
+        <h1 class="h4 mb-1">Blood banks in Haldwani</h1>
+        <p class="text-muted small mb-3">{{ facilities | length }} verified listing{{ '' if facilities|length == 1 else 's' }} ·
+          <a href="/find/about-data">how we verify</a></p>
+
+        <form class="pub-filter" method="get" action="/find" aria-label="Availability filter">
+          <div class="row g-2 align-items-end">
+            <div class="col-12">
+              <label class="form-label small mb-1" for="facility">Blood bank</label>
+              <select class="form-select form-select-sm" id="facility" name="facility">
+                <option value="">All listed blood banks</option>
+                {% for f in all_facilities %}<option value="{{ f.slug }}" {% if facility_filter == f.slug %}selected{% endif %}>{{ f.name }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-5">
+              <label class="form-label small mb-1" for="group">Blood group</label>
+              <select class="form-select form-select-sm" id="group" name="group">
+                <option value="">Any</option>
+                {% for g in groups %}<option {% if group and group.value == g %}selected{% endif %}>{{ g }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-7">
+              <label class="form-label small mb-1" for="component">Component</label>
+              <select class="form-select form-select-sm" id="component" name="component">
+                <option value="">Any</option>
+                {% for c in components %}<option value="{{ c.value }}" {% if component == c %}selected{% endif %}>{{ c.label }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-12 d-flex gap-2">
+              <button class="btn btn-sm btn-bb flex-grow-1" type="submit"><i class="bi bi-funnel"></i> Check availability</button>
+              {% if filtering or facility_filter %}<a class="btn btn-sm btn-outline-secondary" href="/find">Clear</a>{% endif %}
+            </div>
+          </div>
+        </form>
+
+        {% if invalid_filter %}
+        <div class="alert alert-warning small py-2 mt-3">That filter value isn't recognised, so it was ignored.</div>
+        {% endif %}
+
+        {% if filtering %}
+        <div class="pub-availability mt-3" role="status">
+          <div class="fw-semibold mb-1"><i class="bi bi-clipboard2-pulse"></i>
+            {{ group.value if group else 'Any group' }} · {{ component.label if component else 'any component' }}</div>
+          {% if component and component not in tracked %}
+          <p class="small mb-2">Blood banks on Haldwani BloodLink currently publish <strong>whole blood</strong> only.
+            {{ component.label }} isn't tracked here. Please call the blood banks below, or check
+            <a href="{{ eraktkosh_url }}" target="_blank" rel="noopener">e-RaktKosh</a>.</p>
+          {% elif results %}
+          <ul class="list-unstyled mb-2 pub-results">
+            {% for f, c in results %}
+            <li class="d-flex flex-wrap justify-content-between gap-2 py-1 border-bottom">
+              <span><a href="/find/{{ f.slug }}" class="fw-semibold">{{ f.name }}</a> · {{ c.blood_group }}</span>
+              <span>{{ p.status_chip(c) }} <span class="small text-muted">updated {{ views[f.slug].published_at | ist }}</span></span>
+            </li>
+            {% endfor %}
+          </ul>
+          <p class="small text-muted mb-0"><i class="bi bi-exclamation-triangle"></i> {{ notice }}</p>
+          {% else %}
+          <p class="small mb-2">No blood bank currently reports this as available on Haldwani BloodLink. That does not
+            mean none is available. <strong>Please call the blood banks below</strong>, or check the official
+            <a href="{{ eraktkosh_url }}" target="_blank" rel="noopener">e-RaktKosh</a> portal.</p>
+          <p class="small text-muted mb-0">Only current figures published by the blood banks themselves are shown. We never estimate stock.</p>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="pub-nearme mt-3" id="near-me">
+          <button class="btn btn-sm btn-outline-secondary" type="button" id="near-me-btn" disabled>
+            <i class="bi bi-crosshair"></i> Sort by distance from me</button>
+          <div class="small text-muted mt-1" id="near-me-status">Your location stays in your browser; it is never sent to our server.</div>
+        </div>
+
+        <div class="mt-3" id="facility-list">
+        {% for f in facilities %}
+          <article class="pub-card" data-slug="{{ f.slug }}" {% if f.location_verified %}data-lat="{{ f.latitude }}" data-lon="{{ f.longitude }}"{% endif %}>
+            <div class="d-flex justify-content-between gap-2">
+              <h2 class="h6 mb-1"><a href="/find/{{ f.slug }}">{{ f.name }}</a></h2>
+              <span class="pub-distance small text-muted text-nowrap" aria-live="polite"></span>
+            </div>
+            {% if f.official_name and f.official_name != f.name %}<div class="small text-muted mb-1">{{ f.official_name }}</div>{% endif %}
+            <div class="d-flex flex-wrap gap-1 mb-2">{{ p.ownership(f.ownership) }} {{ p.location_chip(f) }}
+              {% if views[f.slug].is_current %}<span class="pub-chip pub-chip-ok"><i class="bi bi-clipboard2-check"></i> Availability updated {{ views[f.slug].published_at | ist }}</span>{% endif %}</div>
+            <div class="small mb-2"><i class="bi bi-building"></i> {{ f.address }}</div>
+            {{ p.phones(f, compact=true) }}
+            <div class="d-flex flex-wrap gap-2 mt-2 align-items-center">
+              {{ p.directions(f) }}
+              {% if f.location_verified %}<button class="btn btn-sm btn-link pub-show-on-map" type="button" data-slug="{{ f.slug }}">Show on map</button>{% endif %}
+              <a class="btn btn-sm btn-link ms-auto" href="/find/{{ f.slug }}">Details <i class="bi bi-chevron-right"></i></a>
+            </div>
+          </article>
+        {% else %}
+          <div class="pub-empty">
+            <i class="bi bi-hourglass-split"></i>
+            <h2 class="h6 mt-2">No blood banks are listed yet</h2>
+            <p class="small mb-2">Listings are published only after their details are verified against official sources or
+              confirmed by the facility. Until then, use the official
+              <a href="{{ eraktkosh_url }}" target="_blank" rel="noopener">e-RaktKosh</a> portal to find blood centres and stock.</p>
+          </div>
+        {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    {# ------------------------------------------------------------- map column #}
+    <div class="col-lg-7 col-xl-8 order-1 order-lg-2">
+      <div class="pub-map-wrap">
+        <div id="map" class="pub-map" role="region" aria-label="Map of verified blood bank locations"
+             data-tile-url="{{ map.tile_url }}" data-attribution="{{ map.attribution }}"
+             data-center="{{ map.center | tojson }}" data-zoom="{{ map.zoom }}"></div>
+        <div class="pub-map-legend small"><i class="bi bi-geo-alt-fill text-danger"></i> Pins show <strong>verified locations only</strong>.
+          {% set unmapped = facilities | rejectattr('location_verified') | list | length %}
+          {% if unmapped %}{{ unmapped }} listed blood bank{{ '' if unmapped == 1 else 's' }} without a verified location {{ 'is' if unmapped == 1 else 'are' }} in the list only.{% endif %}</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}{% include "public/_map_scripts.html" %}{% endblock %}

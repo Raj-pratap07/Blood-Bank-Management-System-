@@ -1,0 +1,68 @@
+{% extends "public/base.html" %}
+{% block title %}Find a blood bank in Haldwani{% endblock %}
+{% block content %}
+<section class="pub-hero">
+  <div class="container">
+    <div class="row align-items-center g-4">
+      <div class="col-lg-7">
+        <span class="pub-eyebrow"><i class="bi bi-geo-alt"></i> Haldwani · Nainital district · Uttarakhand</span>
+        <h1 class="pub-hero-title">Find a blood bank in Haldwani, with details you can trust.</h1>
+        <p class="pub-hero-lead">Addresses, phone numbers and map locations come with their source and the date they were
+          last verified. Nothing is guessed, and unverified details are clearly marked.</p>
+        <div class="d-flex flex-wrap gap-2 mt-4">
+          <a class="btn btn-lg btn-bb" href="/find"><i class="bi bi-search-heart"></i> Find blood banks</a>
+          <a class="btn btn-lg btn-light pub-btn-outline" href="/find#near-me"><i class="bi bi-crosshair"></i> Nearest to me</a>
+        </div>
+      </div>
+      <div class="col-lg-5">
+        <div class="pub-stat-card">
+          <div class="row text-center g-0">
+            <div class="col-6 pub-stat">
+              <div class="pub-stat-value">{{ count }}</div>
+              <div class="pub-stat-label">verified blood bank{{ '' if count == 1 else 's' }} listed</div>
+            </div>
+            <div class="col-6 pub-stat">
+              <div class="pub-stat-value">{{ mapped }}</div>
+              <div class="pub-stat-label">with a verified map location</div>
+            </div>
+          </div>
+          {% if count == 0 %}
+          <p class="small text-muted mt-3 mb-0"><i class="bi bi-hourglass-split"></i> The directory is being built. Blood banks
+            appear here only after their details are checked against official sources or confirmed by the facility itself.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="container my-4">
+  <div class="pub-emergency">
+    <i class="bi bi-telephone-inbound-fill"></i>
+    <div><strong>Need blood urgently?</strong> Call the blood bank before you travel.
+      {% if published %}{{ published }} blood bank{{ '' if published == 1 else 's' }} currently publish{{ 'es' if published == 1 else '' }}
+      availability here. Figures come from the blood bank itself and can change at any time.{% else %}No blood bank
+      currently publishes availability on this site.{% endif %} Licensed blood centres also report stock on the government portal
+      <a href="https://eraktkosh.mohfw.gov.in/" target="_blank" rel="noopener">e-RaktKosh</a>.</div>
+  </div>
+</section>
+
+<section class="container my-5">
+  <h2 class="h4 mb-4 text-center">How information is verified</h2>
+  <div class="row g-4">
+    <div class="col-md-4"><div class="pub-step"><span class="pub-step-n">1</span>
+      <h3 class="h6">Every fact has a source</h3>
+      <p class="small mb-0">Each listing records where its details came from: an official government source, the hospital's own
+        website, or the blood bank itself.</p></div></div>
+    <div class="col-md-4"><div class="pub-step"><span class="pub-step-n">2</span>
+      <h3 class="h6">Checks are dated</h3>
+      <p class="small mb-0">Identity, location and each phone number are verified separately. Checks expire, so stale details are
+        flagged for re-checking.</p></div></div>
+    <div class="col-md-4"><div class="pub-step"><span class="pub-step-n">3</span>
+      <h3 class="h6">No guesses on the map</h3>
+      <p class="small mb-0">A blood bank gets a map pin only when its location is verified. Others are listed with their address
+        and no pin.</p></div></div>
+  </div>
+  <p class="text-center mt-4"><a href="/find/about-data">Read how the data is collected <i class="bi bi-arrow-right"></i></a></p>
+</section>
+{% endblock %}

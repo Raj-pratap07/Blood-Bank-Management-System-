@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.config import BASE_DIR, settings
 from app.database import get_db
-from app.models import BloodGroup, Role, User
+from app.models import FACILITY_ROLES, BloodGroup, Role, User
 from app.services import compatibility, eligibility
 from app.services.security import CSRF_FORM_FIELD, csrf_token_valid, get_csrf_token
 
@@ -32,6 +32,13 @@ class Forbidden(Exception):
 
 class CSRFError(Exception):
     pass
+
+
+class PasswordChangeRequired(Exception):
+    """The account was created or reset by someone else and must choose its own password first."""
+
+
+PASSWORD_CHANGE_PATHS = {"/account/password", "/logout"}
 
 
 # ------------------------------------------------------------------ flash
@@ -65,7 +72,14 @@ templates.env.globals.update(
     ELIGIBILITY_DISCLAIMER=eligibility.DISCLAIMER,
     Role=Role,
 )
-templates.env.filters.update(label=_label, d=_fmt_date)
+def _fmt_ist(value: Any) -> str:
+    """Stored timestamps are naive UTC; the public reads Indian Standard Time (UTC+5:30)."""
+    from datetime import timedelta
+
+    return (value + timedelta(hours=5, minutes=30)).strftime("%d %b %Y, %H:%M IST") if value else "—"
+
+
+templates.env.filters.update(label=_label, d=_fmt_date, ist=_fmt_ist)
 
 
 def render(request: Request, name: str, context: dict | None = None, status_code: int = 200):
@@ -175,6 +189,18 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User:
         request.session.pop("user_id", None)
         raise NotAuthenticated()
     request.state.user = user
+    if user.must_change_password and request.url.path not in PASSWORD_CHANGE_PATHS:
+        raise PasswordChangeRequired()
+    return user
+
+
+def optional_user(request: Request, db: Session = Depends(get_db)) -> User | None:
+    """The signed-in user, or None for anonymous visitors (never raises, never creates a session)."""
+    uid = request.session.get("user_id") if "session" in request.scope else None
+    user = db.get(User, uid) if uid else None
+    if user is None or not user.is_active:
+        return None
+    request.state.user = user
     return user
 
 
@@ -188,6 +214,25 @@ def require_roles(*roles: Role):
 
 require_admin = require_roles(Role.ADMIN)
 require_authorizer = require_roles(Role.ADMIN, Role.MEDICAL_OFFICER)
+# Operational (facility) data: any facility role, never the platform administrator.
+require_facility_user = require_roles(*FACILITY_ROLES)
+require_platform_admin = require_roles(Role.PLATFORM_ADMIN)
+
+
+def get_owned_or_404(db: Session, model, obj_id: int, user: User):
+    """Fetch an operational record of the user's own facility.
+
+    Missing records and records of another facility both produce the same 404, so record
+    IDs cannot be used to discover anything about other blood banks.
+    """
+    from fastapi import HTTPException
+
+    from app.services.scope import is_owned
+
+    obj = db.get(model, obj_id)
+    if obj is None or not is_owned(obj, user):
+        raise HTTPException(status_code=404, detail="Not found")
+    return obj
 
 
 def get_or_404(db: Session, model, obj_id: int):

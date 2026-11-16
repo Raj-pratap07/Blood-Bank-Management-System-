@@ -1,0 +1,61 @@
+{% extends "public/base.html" %}
+{% block title %}How the data is verified{% endblock %}
+{% block content %}
+<div class="container py-5 pub-prose">
+  <h1 class="h3 mb-3">How Haldwani BloodLink verifies its data</h1>
+  <p class="lead">This directory lists blood banks in Haldwani only when their details can be traced to a source.
+    It does not guess addresses, phone numbers, map locations or stock.</p>
+
+  <h2 class="h5 mt-4">Sources we use</h2>
+  <ol>
+    <li><strong>The blood bank itself</strong>: a recorded call, an email or a letter from the facility.</li>
+    <li><strong>Official government sources</strong>, such as the <a href="{{ eraktkosh_url }}" target="_blank" rel="noopener">e-RaktKosh</a>
+      portal (MoHFW) and state and national blood centre lists.</li>
+    <li><strong>The hospital's own official website.</strong></li>
+    <li><strong>Site visits</strong>, for locations only.</li>
+  </ol>
+  <p>Third-party directories and community maps are used only as leads. They can never confirm a detail on their own.</p>
+
+  <h2 class="h5 mt-4">What the labels mean</h2>
+  <dl class="row">
+    <dt class="col-sm-4">Checked against an official source</dt><dd class="col-sm-8">The detail matches a government source or the hospital's official website on the date shown.</dd>
+    <dt class="col-sm-4">Confirmed by the facility</dt><dd class="col-sm-8">The blood bank confirmed it directly.</dd>
+    <dt class="col-sm-4">Verified on site</dt><dd class="col-sm-8">The location was checked in person.</dd>
+    <dt class="col-sm-4">Not yet confirmed</dt><dd class="col-sm-8">The detail comes from a listed source but hasn't been checked directly. Treat it with care.</dd>
+  </dl>
+  <p>Checks are dated and expire. A blood bank whose identity check is out of date, disputed or missing is removed
+    from the public directory until it is re-verified.</p>
+
+  <h2 class="h5 mt-4">The map</h2>
+  <p>A blood bank gets a pin only when its coordinates come from a recorded source <em>and</em> its location has been
+    verified. Other listed blood banks appear in the list with their address and no pin. Map tiles and data are
+    © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>.
+    Directions links hand you over to Google Maps or OpenStreetMap.</p>
+
+  <h2 class="h5 mt-4">Blood availability</h2>
+  <p>Availability appears only when a participating blood bank <strong>publishes it itself</strong>. An authorised
+    administrator or medical officer chooses to publish a summary of the blood bags that are ready to issue (screened,
+    not reserved and not expired). The figures are counted per blood group for whole blood.</p>
+  <ul>
+    <li>Each blood bank chooses to show either a level (Available / Low / Not available) or an exact count.</li>
+    <li>Published figures expire after at most 24 hours (sooner if the blood bank chooses). Expired figures are never shown.</li>
+    <li>If the blood bank's stock falls after publishing, the lower current figure is shown. It is never shown higher.</li>
+    <li>Availability is <strong>not a reservation</strong> and does not guarantee that blood can be issued.
+      <strong>Always call before travelling.</strong></li>
+  </ul>
+  <p>No donor, patient or individual blood bag information is ever published. Blood banks that don't publish are
+    shown as "not published". You can also check <a href="{{ eraktkosh_url }}" target="_blank" rel="noopener">e-RaktKosh</a>,
+    where licensed blood centres report their stock.</p>
+
+  <h2 class="h5 mt-4">Your privacy</h2>
+  <p>"Sort by distance" uses your browser's location <strong>only inside your browser</strong>. Your position is never
+    sent to our server. The public pages set no cookies.</p>
+
+  <h2 class="h5 mt-4">Limitations</h2>
+  <ul>
+    <li>Details can change between checks. <strong>Always call before travelling.</strong></li>
+    <li>Distances are straight-line estimates, not road distances.</li>
+    <li>This site is not an emergency service and does not replace medical advice.</li>
+  </ul>
+</div>
+{% endblock %}

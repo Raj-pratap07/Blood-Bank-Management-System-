@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}{{ f.display_name }}{% endblock %}
+{% block content %}
+{% call m.page_header(f.display_name, (f.official_name or "Official name not yet recorded") ~ " · /" ~ f.slug) %}
+  {% if f.is_demo %}<span class="badge text-bg-dark align-self-center">Fictional demo</span>{% endif %}
+  <a class="btn btn-outline-secondary" href="/platform/facilities/{{ f.id }}/edit"><i class="bi bi-pencil"></i> Edit details</a>
+{% endcall %}
+
+{% if f.is_demo %}
+<div class="alert alert-dark small"><i class="bi bi-info-circle"></i> {{ f.notes }}</div>
+{% endif %}
+
+{# ---------------------------------------------------------------- summary #}
+<div class="row g-3 mb-3">
+  <div class="col-lg-7">
+    <div class="card h-100"><div class="card-header">Verification status</div><div class="card-body">
+      <table class="table table-sm mb-2">
+        {% for scope, eff in summary.items() %}
+        <tr><th class="text-capitalize" style="width:9rem">{{ scope }}</th><td>{{ m.vbadge(eff) }}</td>
+            <td class="small text-muted">{% if eff.entry %}{{ eff.entry.verified_on | d }} · {{ eff.entry.method | label }} · {{ eff.entry.verified_by.full_name }}{% else %}No check recorded{% endif %}</td></tr>
+        {% endfor %}
+      </table>
+      <div class="small text-muted">Positive checks older than {{ settings.verification_max_age_days }} days show as <em>outdated</em>. Contacts are verified individually below.</div>
+    </div></div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card h-100"><div class="card-header">Public listing</div><div class="card-body">
+      {% if f.is_listed %}
+        <p><span class="badge text-bg-success">Listed</span> Will appear in the public directory (Phase 2).</p>
+        <p class="small">Map marker: {% if map_eligible %}<strong>yes</strong>{% else %}<strong>no</strong> (location not confirmed){% endif %}</p>
+        <form method="post" action="/platform/facilities/{{ f.id }}/listing" data-confirm="Unlist this facility?">
+          {{ m.csrf() }}<input type="hidden" name="listed" value="false">
+          <button class="btn btn-outline-warning btn-sm">Unlist</button>
+        </form>
+      {% elif blockers %}
+        <p class="mb-1"><span class="badge text-bg-secondary">Not listed</span> Requirements still missing:</p>
+        <ul class="small mb-0">{% for b in blockers %}<li>{{ b }}</li>{% endfor %}</ul>
+      {% else %}
+        <p><span class="badge text-bg-secondary">Not listed</span> All listing requirements are met.</p>
+        <form method="post" action="/platform/facilities/{{ f.id }}/listing" data-confirm="List this facility publicly?">
+          {{ m.csrf() }}<input type="hidden" name="listed" value="true">
+          <button class="btn btn-success btn-sm"><i class="bi bi-globe"></i> List publicly</button>
+        </form>
+      {% endif %}
+    </div></div>
+  </div>
+</div>
+
+{# ---------------------------------------------------------------- details + location #}
+<div class="row g-3 mb-3">
+  <div class="col-lg-6">
+    <div class="card h-100"><div class="card-header">Recorded details</div><div class="card-body"><dl class="row mb-0 small">
+      <dt class="col-5">Ownership</dt><dd class="col-7">{{ f.ownership | label }}</dd>
+      <dt class="col-5">Operational status</dt><dd class="col-7">{{ f.operational_status | label }}</dd>
+      <dt class="col-5">Parent hospital</dt><dd class="col-7">{{ f.parent_hospital or '—' }}</dd>
+      <dt class="col-5">Other names</dt><dd class="col-7">{{ f.alias_list | join(', ') or '—' }}</dd>
+      <dt class="col-5">Address</dt><dd class="col-7">{{ [f.address_line, f.locality, f.city, f.district, f.state, f.pincode] | select | join(', ') or '—' }}</dd>
+      <dt class="col-5">e-RaktKosh code</dt><dd class="col-7">{{ f.eraktkosh_code or '—' }}</dd>
+      <dt class="col-5">CDSCO licence</dt><dd class="col-7">{{ f.cdsco_license_no or '—' }}</dd>
+      <dt class="col-5">Component separation</dt><dd class="col-7">{{ {None: 'Unknown', True: 'Yes', False: 'No'}[f.has_component_separation] }}</dd>
+      <dt class="col-5">Apheresis</dt><dd class="col-7">{{ {None: 'Unknown', True: 'Yes', False: 'No'}[f.has_apheresis] }}</dd>
+      <dt class="col-5">Created</dt><dd class="col-7">{{ f.created_at | d }}{% if f.created_by %} by {{ f.created_by.full_name }}{% endif %}</dd>
+    </dl></div></div>
+  </div>
+  <div class="col-lg-6" id="location">
+    <div class="card h-100"><div class="card-header">Location</div><div class="card-body">
+      {% if f.has_coordinates %}
+        <p class="mb-1 font-monospace">{{ '%.6f' % f.latitude }}, {{ '%.6f' % f.longitude }}</p>
+        <p class="small text-muted">Source: {{ f.location_source.title }} ({{ f.location_source.source_type | label }}, {{ f.location_source.retrieved_on | d }})</p>
+      {% else %}
+        <p class="small text-muted">No coordinates recorded. The facility will never appear as a map marker without them.</p>
+      {% endif %}
+      {% if not f.is_demo %}
+      {% set err = errors if section == 'location' else {} %}
+      {% set frm = form if section == 'location' else ({'latitude': f.latitude, 'longitude': f.longitude,
+             'location_source_id': f.location_source_id | string} if f.has_coordinates else {}) %}
+      {{ m.form_error(err) }}
+      <form method="post" action="/platform/facilities/{{ f.id }}/location" novalidate class="row g-2">
+        {{ m.csrf() }}
+        {{ m.field("latitude", "Latitude", frm, err, type="number", col="col-6", attrs='step="any"') }}
+        {{ m.field("longitude", "Longitude", frm, err, type="number", col="col-6", attrs='step="any"') }}
+        <div class="col-12">
+          <label class="form-label" for="f-location_source_id">Coordinates taken from</label>
+          <select class="form-select" id="f-location_source_id" name="location_source_id">
+            <option value="">— Select source —</option>
+            {% for s in f.sources %}<option value="{{ s.id }}" {% if frm.get('location_source_id') == s.id|string %}selected{% endif %}>{{ s.title }} ({{ s.source_type | label }})</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-12 form-text">Never estimate or copy coordinates from Google Maps. Leave both blank to clear them.</div>
+        <div class="col-12"><button class="btn btn-outline-secondary btn-sm" type="submit">Save location</button></div>
+      </form>
+      {% endif %}
+    </div></div>
+  </div>
+</div>
+
+{# ---------------------------------------------------------------- sources #}
+<div class="card mb-3" id="sources"><div class="card-header">Sources ({{ f.sources | length }})</div>
+  <div class="table-responsive"><table class="table table-sm mb-0">
+    <thead><tr><th class="ps-3">Title</th><th>Type</th><th>Reference</th><th>Retrieved</th><th class="pe-3">Added by</th></tr></thead>
+    <tbody>
+    {% for s in f.sources %}
+      <tr><td class="ps-3">{{ s.title }}{% if s.notes %}<div class="small text-muted">{{ s.notes }}</div>{% endif %}</td>
+          <td>{{ s.source_type | label }}{% if s.source_type.is_official %} <span class="badge text-bg-info">official</span>{% endif %}</td>
+          <td class="small text-break">{% if s.reference.startswith('http') %}<a href="{{ s.reference }}" target="_blank" rel="noopener noreferrer">{{ s.reference }}</a>{% else %}{{ s.reference }}{% endif %}</td>
+          <td>{{ s.retrieved_on | d }}</td><td class="pe-3">{{ s.created_by.full_name }}</td></tr>
+    {% else %}{{ m.empty(5, "No sources yet. Add the document, portal entry or communication you are taking information from.") }}{% endfor %}
+    </tbody>
+  </table></div>
+  {% if not f.is_demo %}
+  <div class="card-body border-top">
+    {% set err = errors if section == 'sources' else {} %}{% set frm = form if section == 'sources' else {'retrieved_on': today} %}
+    {{ m.form_error(err) }}
+    <form method="post" action="/platform/facilities/{{ f.id }}/sources" novalidate class="row g-2">
+      {{ m.csrf() }}
+      {{ m.select("source_type", "Type", options.source_type, frm, err, required=true, col="col-md-3") }}
+      {{ m.field("title", "Title", frm, err, required=true, col="col-md-4") }}
+      {{ m.field("retrieved_on", "Retrieved / received on", frm, err, type="date", required=true, col="col-md-2") }}
+      {{ m.field("reference", "URL or reference", frm, err, required=true, col="col-md-3") }}
+      {{ m.field("notes", "Notes", frm, err, col="col-md-9") }}
+      <div class="col-md-3 d-grid align-self-end"><button class="btn btn-outline-secondary" type="submit"><i class="bi bi-plus"></i> Add source</button></div>
+    </form>
+    <div class="form-text">Third-party directories and OpenStreetMap are leads only; they can never confirm a fact on their own.</div>
+  </div>
+  {% endif %}
+</div>
+
+{# ---------------------------------------------------------------- contacts #}
+<div class="card mb-3" id="contacts"><div class="card-header">Contacts</div>
+  <div class="table-responsive"><table class="table table-sm mb-0">
+    <thead><tr><th class="ps-3">Type</th><th>Value</th><th>Label</th><th>Source</th><th>Public</th><th>Status</th><th class="pe-3"></th></tr></thead>
+    <tbody>
+    {% for c, eff in contacts %}
+      <tr class="{% if not c.is_active %}text-muted text-decoration-line-through{% endif %}">
+        <td class="ps-3">{{ c.kind | label }}</td><td class="font-monospace">{{ c.value }}</td><td>{{ c.label or '—' }}</td>
+        <td class="small">{{ c.source.title }}</td><td>{{ 'Yes' if c.is_public else 'No' }}</td>
+        <td>{% if c.is_active %}{{ m.vbadge(eff) }}{% else %}Retired{% endif %}</td>
+        <td class="pe-3">{% if c.is_active %}
+          <form method="post" action="/platform/facilities/{{ f.id }}/contacts/{{ c.id }}/retire" data-confirm="Retire this contact?">
+            {{ m.csrf() }}<button class="btn btn-sm btn-link text-danger p-0">Retire</button></form>{% endif %}</td>
+      </tr>
+    {% else %}{{ m.empty(7, "No contacts recorded.") }}{% endfor %}
+    </tbody>
+  </table></div>
+  {% if not f.is_demo %}
+  <div class="card-body border-top">
+    {% set err = errors if section == 'contacts' else {} %}{% set frm = form if section == 'contacts' else {} %}
+    {{ m.form_error(err) }}
+    {% if f.sources %}
+    <form method="post" action="/platform/facilities/{{ f.id }}/contacts" novalidate class="row g-2">
+      {{ m.csrf() }}
+      {{ m.select("kind", "Type", options.contact_kind, frm, err, required=true, col="col-md-2") }}
+      {{ m.field("value", "Number / address / URL", frm, err, required=true, col="col-md-3") }}
+      {{ m.field("label", "Label (e.g. Blood bank direct)", frm, err, col="col-md-3") }}
+      <div class="col-md-4">
+        <label class="form-label" for="f-source_id">Source <span class="text-danger">*</span></label>
+        <select class="form-select {% if err.get('source_id') %}is-invalid{% endif %}" id="f-source_id" name="source_id" required>
+          <option value="">— Select source —</option>
+          {% for s in f.sources %}<option value="{{ s.id }}" {% if frm.get('source_id') == s.id|string %}selected{% endif %}>{{ s.title }}</option>{% endfor %}
+        </select>
+        {% if err.get('source_id') %}<div class="invalid-feedback">{{ err['source_id'] }}</div>{% endif %}
+      </div>
+      {{ m.checkbox("is_public", "Show publicly once the facility is listed", frm, err, col="col-md-9") }}
+      <div class="col-md-3 d-grid"><button class="btn btn-outline-secondary" type="submit"><i class="bi bi-plus"></i> Add contact</button></div>
+    </form>
+    {% else %}<div class="small text-muted">Add a source first: every contact must cite where it came from.</div>{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{# ---------------------------------------------------------------- onboarding #}
+<div class="card mb-3" id="onboarding"><div class="card-header">Onboarding <span class="small text-muted fw-normal">(staff accounts)</span></div>
+  <div class="card-body">
+    <p class="small mb-2">Participating on the platform: <strong>{{ 'Yes' if f.is_participating else 'No' }}</strong> ·
+      Staff accounts: <strong>{{ account_count }}</strong>.
+      Platform administrators never see a facility's donors, inventory, requests or issues.</p>
+    {% if setup_link %}
+    <div class="alert alert-warning" role="alert">
+      <div class="fw-semibold mb-1"><i class="bi bi-key"></i> One-time setup link for <span class="font-monospace">{{ setup_link.username }}</span></div>
+      <input class="form-control font-monospace mb-2" readonly value="{{ setup_link.url }}" aria-label="One-time setup link" onclick="this.select()">
+      <div class="small">Give this link to the blood bank's administrator through a trusted channel. It works <strong>once</strong>,
+        expires in {{ settings.setup_link_valid_hours }} hours, and lets them choose their own password. It is shown only now
+        and is not stored in readable form.</div>
+    </div>
+    {% endif %}
+    {% if pending_setup %}
+    <div class="small mb-2"><strong>Awaiting first sign-in:</strong>
+      {% for u in pending_setup %}
+      <form method="post" action="/platform/facilities/{{ f.id }}/onboard/{{ u.id }}/reissue" class="d-inline" data-confirm="Issue a new link? The previous link will stop working.">
+        {{ m.csrf() }}<span class="font-monospace">{{ u.username }}</span>
+        (link expires {{ u.setup_token_expires_at | ist }})
+        <button class="btn btn-sm btn-link p-0 align-baseline" type="submit">issue new link</button></form>{% if not loop.last %} · {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if f.operational_status.value != 'closed' %}
+    {% set err = errors if section == 'onboarding' else {} %}{% set frm = form if section == 'onboarding' else {} %}
+    {{ m.form_error(err) }}
+    <form method="post" action="/platform/facilities/{{ f.id }}/onboard" novalidate class="row g-2" autocomplete="off">
+      {{ m.csrf() }}
+      {{ m.field("username", "Administrator username", frm, err, required=true, col="col-md-4") }}
+      {{ m.field("full_name", "Full name", frm, err, required=true, col="col-md-5") }}
+      <div class="col-md-3 d-grid align-self-end"><button class="btn btn-outline-secondary" type="submit">Create admin &amp; setup link</button></div>
+    </form>
+    <div class="form-text">Creates the blood bank's own administrator with <strong>no password</strong>. They set it themselves
+      through the one-time link, then add their medical officers and staff.</div>
+    {% else %}
+    <div class="small text-muted">This facility is closed: its accounts are deactivated and no new accounts can be created.</div>
+    {% endif %}
+  </div>
+</div>
+
+{# ---------------------------------------------------------------- verification #}
+<div class="card mb-3" id="verification"><div class="card-header">Verification log <span class="small text-muted fw-normal">(append-only)</span></div>
+  <div class="table-responsive"><table class="table table-sm mb-0">
+    <thead><tr><th class="ps-3">Checked on</th><th>Scope</th><th>Result</th><th>Method</th><th>Evidence</th><th class="pe-3">By</th></tr></thead>
+    <tbody>
+    {% for v in history %}
+      <tr><td class="ps-3">{{ v.verified_on | d }}</td>
+          <td>{{ v.scope | label }}{% if v.contact %}<div class="small font-monospace">{{ v.contact.value }}</div>{% endif %}</td>
+          <td>{{ m.vbadge({'status': v.status, 'entry': v}) }}</td>
+          <td>{{ v.method | label }}</td>
+          <td class="small">{{ v.evidence_note }}{% if v.source %}<div class="text-muted">Source: {{ v.source.title }}</div>{% endif %}</td>
+          <td class="pe-3 small">{{ v.verified_by.full_name }}<div class="text-muted">recorded {{ v.recorded_at.strftime('%d %b %Y %H:%M') }} UTC</div></td></tr>
+    {% else %}{{ m.empty(6, "No verifications recorded. Every scope is unverified.") }}{% endfor %}
+    </tbody>
+  </table></div>
+  {% if not f.is_demo %}
+  <div class="card-body border-top">
+    {% set err = errors if section == 'verification' else {} %}{% set frm = form if section == 'verification' else {'verified_on': today} %}
+    {{ m.form_error(err) }}
+    <form method="post" action="/platform/facilities/{{ f.id }}/verifications" novalidate class="row g-2">
+      {{ m.csrf() }}
+      {{ m.select("scope", "Scope", options.scope, frm, err, required=true, col="col-md-2") }}
+      <div class="col-md-3">
+        <label class="form-label" for="f-contact_id">Contact (contact scope only)</label>
+        <select class="form-select {% if err.get('contact_id') %}is-invalid{% endif %}" id="f-contact_id" name="contact_id">
+          <option value="">—</option>
+          {% for c, _ in contacts if c.is_active %}<option value="{{ c.id }}" {% if frm.get('contact_id') == c.id|string %}selected{% endif %}>{{ c.kind | label }}: {{ c.value }}</option>{% endfor %}
+        </select>
+      </div>
+      {{ m.select("status", "Result", options.status, frm, err, required=true, col="col-md-2") }}
+      {{ m.select("method", "Method", options.method, frm, err, required=true, col="col-md-2") }}
+      {{ m.field("verified_on", "Checked on", frm, err, type="date", required=true, col="col-md-3") }}
+      <div class="col-md-4">
+        <label class="form-label" for="f-vsource_id">Evidence source</label>
+        <select class="form-select" id="f-vsource_id" name="source_id">
+          <option value="">— None —</option>
+          {% for s in f.sources %}<option value="{{ s.id }}" {% if frm.get('source_id') == s.id|string %}selected{% endif %}>{{ s.title }} ({{ s.source_type | label }})</option>{% endfor %}
+        </select>
+      </div>
+      {{ m.field("evidence_note", "What exactly was checked and found", frm, err, required=true, col="col-md-6") }}
+      <div class="col-md-2 d-grid align-self-end"><button class="btn btn-bb" type="submit">Record</button></div>
+    </form>
+    <div class="form-text mt-2">
+      <strong>Source confirmed</strong> needs an official source (government portal/document or the facility's own website) ·
+      <strong>Facility confirmed</strong> needs direct contact (call, email, letter or visit) recorded as a "facility confirmation" source ·
+      <strong>Field verified</strong> is for location only, after a site visit. Entries cannot be edited or deleted; record a new check instead.
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}{{ 'Edit facility' if facility else 'Add facility' }}{% endblock %}
+{% block content %}
+{{ m.page_header(('Edit — ' ~ facility.display_name) if facility else 'Add facility',
+                 'Enter only information you have a source for. Leave unknown fields blank.') }}
+<form method="post" novalidate>
+  {{ m.csrf() }}
+  {{ m.form_error(errors) }}
+  <div class="card mb-3"><div class="card-header">Identity</div><div class="card-body row g-3">
+    {{ m.field("display_name", "Display name", form, errors, required=true) }}
+    {{ m.field("official_name", "Official name (as in the official source)", form, errors) }}
+    {{ m.select("ownership", "Ownership", options.ownership, form, errors, blank=none, col="col-md-3") }}
+    {{ m.select("operational_status", "Operational status", options.operational_status, form, errors, blank=none, col="col-md-3") }}
+    {{ m.field("parent_hospital", "Parent hospital", form, errors) }}
+    {{ m.textarea("aliases", "Other names used in sources (one per line)", form, errors, rows=2, col="col-md-6") }}
+    {{ m.field("eraktkosh_code", "e-RaktKosh code", form, errors, col="col-md-3") }}
+    {{ m.field("cdsco_license_no", "CDSCO licence no.", form, errors, col="col-md-3") }}
+  </div></div>
+  <div class="card mb-3"><div class="card-header">Address</div><div class="card-body row g-3">
+    {{ m.field("address_line", "Address line", form, errors, col="col-md-8") }}
+    {{ m.field("locality", "Locality", form, errors, col="col-md-4") }}
+    {{ m.field("city", "City", form, errors, col="col-md-3") }}
+    {{ m.field("district", "District", form, errors, col="col-md-3") }}
+    {{ m.field("state", "State", form, errors, col="col-md-3") }}
+    {{ m.field("pincode", "PIN code", form, errors, col="col-md-3") }}
+    <div class="col-12 form-text">Coordinates are entered on the facility page, together with their source.</div>
+  </div></div>
+  <div class="card mb-3"><div class="card-header">Services</div><div class="card-body row g-3">
+    {{ m.select("has_component_separation", "Component separation", options.tristate, form, errors, blank=none, col="col-md-3") }}
+    {{ m.select("has_apheresis", "Apheresis", options.tristate, form, errors, blank=none, col="col-md-3") }}
+    {{ m.textarea("notes", "Internal notes", form, errors, rows=2, col="col-md-6") }}
+  </div></div>
+  <button class="btn btn-bb" type="submit"><i class="bi bi-check-lg"></i> Save</button>
+  <a class="btn btn-outline-secondary" href="{{ '/platform/facilities/' ~ facility.id if facility else '/platform/facilities' }}">Cancel</a>
+</form>
+{% endblock %}

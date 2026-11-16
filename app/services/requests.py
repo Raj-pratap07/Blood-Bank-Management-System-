@@ -18,13 +18,15 @@ from app.schemas.forms import BloodRequestIn, IssueIn
 from app.services.compatibility import is_compatible
 from app.services.errors import InventoryError, PermissionDenied, ServiceError
 from app.services.inventory import expire_overdue_units, fefo_candidates
+from app.services.scope import ensure_owned, facility_id_of
 from app.services.tx import transaction
 from app.utils import utcnow
 
 
 def create_request(db: Session, data: BloodRequestIn, actor: User) -> BloodRequest:
+    fid = facility_id_of(actor)                     # never taken from the submitted form
     with transaction(db):
-        req = BloodRequest(**data.model_dump(), status=RequestStatus.PENDING, created_by=actor)
+        req = BloodRequest(**data.model_dump(), facility_id=fid, status=RequestStatus.PENDING, created_by=actor)
         db.add(req)
     return req
 
@@ -38,7 +40,8 @@ def _reserved_count(db: Session, req: BloodRequest) -> int:
         BloodUnit.reserved_for_request_id == req.id, BloodUnit.status == UnitStatus.RESERVED)) or 0
 
 
-def _claim_request(db: Session, req: BloodRequest, allowed: tuple[RequestStatus, ...], action: str) -> RequestStatus:
+def _claim_request(db: Session, req: BloodRequest, allowed: tuple[RequestStatus, ...], action: str,
+                   actor: User) -> RequestStatus:
     """First statement of every state-changing transaction on a request.
 
     A no-op conditional UPDATE matches only if the request is *still* in an allowed
@@ -47,9 +50,10 @@ def _claim_request(db: Session, req: BloodRequest, allowed: tuple[RequestStatus,
     a status read before the transaction could be stale (e.g. approving a request
     another user had just cancelled). Returns the current status.
     """
+    fid = facility_id_of(actor)
     res = db.execute(
         update(BloodRequest)
-        .where(BloodRequest.id == req.id, BloodRequest.status.in_(allowed))
+        .where(BloodRequest.id == req.id, BloodRequest.facility_id == fid, BloodRequest.status.in_(allowed))
         .values(status=BloodRequest.status)
         .execution_options(synchronize_session=False)
     )
@@ -69,17 +73,18 @@ def approve_and_reserve(db: Session, req: BloodRequest, actor: User, note: str |
     """
     if not actor.can_authorize:
         raise PermissionDenied("Only a medical officer or administrator can approve requests.")
+    ensure_owned(req, actor, "Request")
     if req.status not in OPEN_REQUEST_STATUSES:
         raise ServiceError(f"Request is {req.status.value} and cannot be approved.")
     on = on or date.today()
     expire_overdue_units(db, on)
 
     with transaction(db):
-        current = _claim_request(db, req, OPEN_REQUEST_STATUSES, "approved")
+        current = _claim_request(db, req, OPEN_REQUEST_STATUSES, "approved", actor)
         needed = req.units_required - _issued_count(db, req) - _reserved_count(db, req)
         if needed <= 0:
             raise InventoryError("Enough bags are already reserved or issued for this request.")
-        candidates = fefo_candidates(db, req.blood_group, on, limit=needed)
+        candidates = fefo_candidates(db, req.facility_id, req.blood_group, on, limit=needed)  # own stock only
         if not candidates:
             raise InventoryError(f"No unexpired, compatible bags available for {req.blood_group.value}.")
         for unit in candidates:
@@ -89,8 +94,8 @@ def approve_and_reserve(db: Session, req: BloodRequest, actor: User, note: str |
             # so two concurrent approvals can never reserve the same bag.
             res = db.execute(
                 update(BloodUnit)
-                .where(BloodUnit.id == unit.id, BloodUnit.status == UnitStatus.AVAILABLE,
-                       BloodUnit.expires_on >= on)
+                .where(BloodUnit.id == unit.id, BloodUnit.facility_id == req.facility_id,
+                       BloodUnit.status == UnitStatus.AVAILABLE, BloodUnit.expires_on >= on)
                 .values(status=UnitStatus.RESERVED, reserved_for_request_id=req.id,
                         status_note=f"Reserved for {req.code}")
                 .execution_options(synchronize_session="fetch")
@@ -118,12 +123,13 @@ def _release_reservations(db: Session, req: BloodRequest) -> None:
 def reject_request(db: Session, req: BloodRequest, actor: User, reason: str) -> None:
     if not actor.can_authorize:
         raise PermissionDenied("Only a medical officer or administrator can reject requests.")
+    ensure_owned(req, actor, "Request")
     if req.status not in OPEN_REQUEST_STATUSES:
         raise ServiceError(f"Request is {req.status.value} and cannot be rejected.")
     if not reason or len(reason.strip()) < 3:
         raise ServiceError("A rejection reason is required.")
     with transaction(db):
-        _claim_request(db, req, OPEN_REQUEST_STATUSES, "rejected")
+        _claim_request(db, req, OPEN_REQUEST_STATUSES, "rejected", actor)
         if _issued_count(db, req):  # checked under the write lock
             raise ServiceError("Bags have already been issued for this request, so it cannot be rejected. "
                                "Use Cancel to close the remaining units.")
@@ -136,10 +142,11 @@ def reject_request(db: Session, req: BloodRequest, actor: User, reason: str) -> 
 
 
 def cancel_request(db: Session, req: BloodRequest, actor: User, reason: str | None = None) -> None:
+    ensure_owned(req, actor, "Request")
     if req.status not in OPEN_REQUEST_STATUSES:
         raise ServiceError(f"Request is {req.status.value} and cannot be cancelled.")
     with transaction(db):
-        _claim_request(db, req, OPEN_REQUEST_STATUSES, "cancelled")
+        _claim_request(db, req, OPEN_REQUEST_STATUSES, "cancelled", actor)
         _release_reservations(db, req)
         req.status = RequestStatus.CANCELLED
         req.decision_note = (reason or "").strip() or f"Cancelled by {actor.username}"
@@ -148,6 +155,7 @@ def cancel_request(db: Session, req: BloodRequest, actor: User, reason: str | No
 
 def issue_units(db: Session, req: BloodRequest, data: IssueIn, actor: User, on: date | None = None) -> list[Issue]:
     """Issue reserved bags. All-or-nothing: any failure rolls back every change."""
+    ensure_owned(req, actor, "Request")
     if req.status not in (RequestStatus.APPROVED, RequestStatus.PARTIALLY_ISSUED):
         raise ServiceError("Bags can only be issued for a request approved by a medical officer.")
     if not data.crossmatch_confirmed:
@@ -157,12 +165,13 @@ def issue_units(db: Session, req: BloodRequest, data: IssueIn, actor: User, on: 
 
     issues: list[Issue] = []
     with transaction(db):
-        _claim_request(db, req, (RequestStatus.APPROVED, RequestStatus.PARTIALLY_ISSUED), "issued")
+        _claim_request(db, req, (RequestStatus.APPROVED, RequestStatus.PARTIALLY_ISSUED), "issued", actor)
         issued_before = _issued_count(db, req)
         if issued_before + len(set(data.unit_ids)) > req.units_required:
             raise InventoryError("Issuing these bags would exceed the units required.")
         units = list(db.scalars(
-            select(BloodUnit).where(BloodUnit.id.in_(data.unit_ids)).order_by(BloodUnit.expires_on, BloodUnit.id)
+            select(BloodUnit).where(BloodUnit.id.in_(data.unit_ids), BloodUnit.facility_id == req.facility_id)
+            .order_by(BloodUnit.expires_on, BloodUnit.id)
             .execution_options(populate_existing=True)  # current values, not stale identity-map copies
         ))
         if len(units) != len(set(data.unit_ids)):
@@ -184,7 +193,7 @@ def issue_units(db: Session, req: BloodRequest, data: IssueIn, actor: User, on: 
             )
             if res.rowcount != 1:
                 raise InventoryError(f"Bag {unit.unit_code} changed state during issue; please retry.")
-            issue = Issue(request_id=req.id, blood_unit_id=unit.id, issued_by=actor,
+            issue = Issue(facility_id=req.facility_id, request_id=req.id, blood_unit_id=unit.id, issued_by=actor,
                           received_by=data.received_by, crossmatch_confirmed=True, notes=data.notes)
             db.add(issue)
             issues.append(issue)

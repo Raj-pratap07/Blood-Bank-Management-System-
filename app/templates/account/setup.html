@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}Set up your account{% endblock %}
+{% block content %}
+<div class="login-wrap">
+  <div class="text-center mb-4">
+    <i class="bi bi-key" style="font-size:2.5rem;color:var(--bb-red)"></i>
+    <h1 class="h4 mt-2">Set up your Haldwani BloodLink account</h1>
+  </div>
+  <div class="card"><div class="card-body p-4">
+  {% if valid %}
+    <p class="small text-muted">Choose your own password. This link works once; nobody else knows the password you choose.</p>
+    {{ m.form_error(errors) }}
+    <form method="post" novalidate autocomplete="off">
+      {{ m.csrf() }}
+      <div class="row g-3">
+        {{ m.field("new_password", "New password", {}, errors, type="password", required=true, col="col-12", help="8-72 characters.") }}
+        {{ m.field("confirm_password", "Repeat new password", {}, errors, type="password", required=true, col="col-12") }}
+      </div>
+      <button class="btn btn-bb w-100 mt-3" type="submit">Set password</button>
+    </form>
+  {% else %}
+    {{ m.form_error(errors) }}
+    <p class="mb-0">This setup link is invalid, has expired or has already been used. Ask the platform administrator for a new link.</p>
+  {% endif %}
+  </div></div>
+</div>
+{% endblock %}

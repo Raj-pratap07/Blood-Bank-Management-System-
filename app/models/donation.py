@@ -32,6 +32,8 @@ class Donation(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # Owning facility (Phase 3). Required and immutable: enforced by database triggers (migration v3).
+    facility_id: Mapped[int | None] = mapped_column(ForeignKey("facilities.id"), index=True)
     donor_id: Mapped[int] = mapped_column(ForeignKey("donors.id"), index=True)
     donation_date: Mapped[date] = mapped_column(index=True)
     blood_group: Mapped[BloodGroup] = mapped_column(db_enum(BloodGroup))

@@ -68,6 +68,18 @@
 <span class="badge text-bg-{{ STATUS_CLASSES.get(v, 'secondary') }} bb-badge">{{ v | label }}</span>
 {%- endmacro %}
 
+{% set VSTATUS = {
+  'unverified': ('secondary', 'Unverified'), 'source_confirmed': ('info', 'Source confirmed'),
+  'facility_confirmed': ('success', 'Facility confirmed'), 'field_verified': ('success', 'Field verified'),
+  'disputed': ('danger', 'Disputed'), 'outdated': ('warning', 'Outdated — re-verify'),
+} %}
+
+{% macro vbadge(eff) -%}
+{# eff: services.facilities.EffectiveStatus #}
+{% set cls, text = VSTATUS[eff.status.value] %}
+<span class="badge text-bg-{{ cls }}" title="{% if eff.entry %}Last check {{ eff.entry.verified_on | d }} ({{ eff.entry.method | label }}){% else %}No verification recorded{% endif %}">{{ text }}</span>
+{%- endmacro %}
+
 {% macro group(g) -%}
 {% set v = g.value if g.value is defined else g %}
 <span class="bb-group">{{ v }}</span>

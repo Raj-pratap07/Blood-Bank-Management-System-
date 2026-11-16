@@ -1,8 +1,15 @@
 """Populate the database with realistic demo data.
 
 Usage:
-    python -m scripts.seed           # only if the database is empty
-    python -m scripts.seed --reset   # DROP all tables and re-seed
+    python -m scripts.seed                                   # only if the database is empty
+    python -m scripts.seed --reset --confirm-reset demo.db   # DROP all tables and re-seed
+
+Reset safety (destructive):
+- ``--confirm-reset`` must repeat the database FILE NAME exactly;
+- the database must carry the seed script's demo marker (PRAGMA application_id), which only this
+  script writes, so a database created any other way (e.g. production) can never be reset;
+- it must contain only the fictional demo facility and the documented demo accounts;
+- a verified backup (scripts/backup_db.py) is taken first; if it fails, nothing is dropped.
 
 All records are created through the service layer (same validation, eligibility,
 screening, FEFO and transaction rules as the web app), replayed along a
@@ -15,10 +22,12 @@ import argparse
 import random
 import sys
 from datetime import date, datetime, time, timedelta
+from pathlib import Path
 
 from sqlalchemy import func, select
 
-from app.database import Base, SessionLocal, engine, init_db
+from app.config import settings
+from app.database import SessionLocal, engine, init_db
 from app.models import BloodGroup as G
 from app.models import BloodRequest, Donation, Donor, Gender, Issue, RequestPriority, Role, User
 from app.schemas.forms import BloodRequestIn, DonationIn, DonorIn, IssueIn, ScreeningIn, UserIn
@@ -33,6 +42,9 @@ DEMO_USERS = [
     ("admin", "System Administrator", Role.ADMIN, "Admin@12345"),
     ("dr.mehta", "Dr. Kavita Mehta", Role.MEDICAL_OFFICER, "Doctor@12345"),
     ("staff", "Rohit Negi", Role.STAFF, "Staff@12345"),
+    # Manages the facility directory only (no operational data). No facilities are seeded:
+    # real facility data must be entered by hand from verified sources.
+    ("platform", "Platform Administrator", Role.PLATFORM_ADMIN, "Platform@12345"),
 ]
 
 FIRST_M = ["Aarav", "Vivek", "Rahul", "Karan", "Amit", "Sandeep", "Manish", "Deepak", "Ankit", "Harish",
@@ -87,7 +99,7 @@ class Seeder:
             full_name=f"{first} {last}", gender=gender, date_of_birth=dob, blood_group=group,
             phone=self.next_phone(), email=f"{first.lower()}.{last.lower()}{r.randint(1, 99)}@example.com",
             address=f"{r.randint(1, 250)}, {r.choice(['Rajpur Road', 'Clement Town', 'Prem Nagar', 'Ballupur', 'Raipur', 'Bell Road'])}",
-            city=city, weight_kg=weight, **extra))
+            city=city, weight_kg=weight, **extra), self.users["staff"])
         donor.created_at = at(self.today - timedelta(days=200 + r.randint(0, 200)))
         self.donors.append(donor)
         return donor
@@ -168,13 +180,21 @@ class Seeder:
         for username, name, role, pw in DEMO_USERS:
             if admin is None:  # bootstrap the first admin directly
                 from app.services.security import hash_password
-                admin = User(username=username, full_name=name, role=role, password_hash=hash_password(pw))
+                from app.models import Facility
+                demo = self.db.query(Facility).filter(Facility.is_demo.is_(True)).one()  # created by migration v2
+                admin = User(username=username, full_name=name, role=role, facility_id=demo.id,
+                             password_hash=hash_password(pw))
                 self.db.add(admin)
                 self.db.commit()
                 self.users[username] = admin
+            elif role == Role.PLATFORM_ADMIN:
+                self.users[username] = user_svc.create_platform_admin(self.db, username, name, pw)
             else:
-                self.users[username] = user_svc.create_user(
+                u = user_svc.create_user(
                     self.db, UserIn(username=username, full_name=name, role=role, password=pw), admin)
+                u.must_change_password = False   # demo accounts use the documented demo passwords
+                self.db.commit()
+                self.users[username] = u
 
         groups = list(GROUP_WEIGHTS)
         weights = list(GROUP_WEIGHTS.values())
@@ -272,14 +292,109 @@ class Seeder:
         expire_overdue_units(self.db, self.today)
 
 
+def reset_database(eng) -> None:
+    """Drop every table AND reset the schema version, so init_db() rebuilds and re-runs all migrations.
+
+    Uses the raw SQLite connection with manual transaction control (like app.migrations): foreign keys
+    are switched off for the drop because tables reference each other in cycles, and PRAGMA
+    user_version is reset, otherwise migrations (e.g. the demo facility) would be skipped.
+    """
+    pooled = eng.raw_connection()
+    conn = pooled.driver_connection
+    saved = conn.isolation_level
+    conn.isolation_level = None
+    try:
+        conn.execute("PRAGMA foreign_keys = OFF")          # only effective outside a transaction
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            tables = [r[0] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")]
+            for t in tables:
+                conn.execute(f'DROP TABLE IF EXISTS "{t}"')    # drops the table's indexes and triggers too
+            conn.execute("PRAGMA user_version = 0")
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.isolation_level = saved
+        pooled.close()
+
+
+# "BLDM" — stamped into databases created by this script; reset is refused without it.
+DEMO_APPLICATION_ID = 0x424C444D
+
+
+def _db_file() -> Path | None:
+    url = settings.database_url
+    return Path(url.removeprefix("sqlite:///")) if url.startswith("sqlite:///") else None
+
+
+def _sqlite_ro(path: Path):
+    import sqlite3
+    return sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
+
+
+def reset_blockers(path: Path) -> list[str]:
+    """Reasons this database must NOT be reset (empty list = it is a disposable demo database)."""
+    if not path.exists():
+        return []
+    conn = _sqlite_ro(path)
+    try:
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if not tables:
+            return []
+        reasons = []
+        if conn.execute("PRAGMA application_id").fetchone()[0] != DEMO_APPLICATION_ID:
+            reasons.append("it was not created by this seed script (no demo marker), so it may hold real data")
+        if "facilities" in tables:
+            real = conn.execute("SELECT count(*) FROM facilities WHERE is_demo = 0").fetchone()[0]
+            if real:
+                reasons.append(f"it contains {real} non-demo facilit{'y' if real == 1 else 'ies'}")
+        if "users" in tables:
+            demo_names = {u for u, _, _, _ in DEMO_USERS}
+            others = [r[0] for r in conn.execute("SELECT username FROM users") if r[0] not in demo_names]
+            if others:
+                reasons.append(f"it contains {len(others)} account(s) that are not seed demo accounts")
+        return reasons
+    finally:
+        conn.close()
+
+
+def _mark_as_demo(eng) -> None:
+    pooled = eng.raw_connection()
+    try:
+        pooled.driver_connection.execute(f"PRAGMA application_id = {DEMO_APPLICATION_ID}")
+        pooled.driver_connection.commit()
+    finally:
+        pooled.close()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--reset", action="store_true", help="drop all tables and re-seed")
+    parser.add_argument("--reset", action="store_true", help="drop all tables and re-seed (demo databases only)")
+    parser.add_argument("--confirm-reset", metavar="DB_FILE_NAME",
+                        help="required with --reset: the database file name, typed exactly (e.g. demo.db)")
     args = parser.parse_args(argv)
 
     if args.reset:
-        import app.models  # noqa: F401
-        Base.metadata.drop_all(engine)
+        path = _db_file()
+        if path is None:
+            print("Refusing to reset: only SQLite file databases are supported.", file=sys.stderr)
+            return 3
+        if args.confirm_reset != path.name:
+            print(f"Refusing to reset: confirm by adding  --confirm-reset {path.name}  "
+                  f"(this permanently drops every table in {path}).", file=sys.stderr)
+            return 2
+        blockers = reset_blockers(path)
+        if blockers:
+            print(f"Refusing to reset {path}: " + "; ".join(blockers) + ". Nothing was changed.", file=sys.stderr)
+            return 3
+        if path.exists() and path.stat().st_size:
+            from scripts.backup_db import backup
+            backup("pre-reset")                # verified copy; raises SystemExit (nothing dropped) on failure
+        reset_database(engine)
     init_db()
     with SessionLocal() as db:
         if db.scalar(select(func.count()).select_from(User)):
@@ -288,6 +403,7 @@ def main(argv: list[str] | None = None) -> int:
         Seeder(db, date.today()).run()
         counts = {m.__name__: db.scalar(select(func.count()).select_from(m))
                   for m in (User, Donor, Donation, BloodRequest, Issue)}
+    _mark_as_demo(engine)
     print("Seed complete:", ", ".join(f"{k}={v}" for k, v in counts.items()))
     print("Demo logins: " + ", ".join(f"{u} / {p} ({r.label})" for u, _, r, p in DEMO_USERS))
     return 0

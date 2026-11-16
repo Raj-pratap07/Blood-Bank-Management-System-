@@ -12,9 +12,10 @@ from app.services import requests as req_svc
 from app.services.compatibility import compatible_donor_groups
 from app.services.errors import ServiceError
 from app.services.inventory import available_count_by_group, expire_overdue_units
-from app.web import Page, current_user, flash, form_dict, get_or_404, redirect, render, require_authorizer, validate
+from app.services.scope import facility_id_of
+from app.web import Page, current_user, flash, form_dict, get_owned_or_404, redirect, render, require_authorizer, require_facility_user, validate
 
-router = APIRouter(prefix="/requests")
+router = APIRouter(prefix="/requests", dependencies=[Depends(require_facility_user)])
 
 PRIORITY_ORDER = case(
     (BloodRequest.priority == RequestPriority.EMERGENCY, 0),
@@ -24,7 +25,8 @@ PRIORITY_ORDER = case(
 @router.get("")
 def list_requests(request: Request, status: str = "", priority: str = "", group: str = "", q: str = "",
                   page: int = 1, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    stmt = select(BloodRequest).options(selectinload(BloodRequest.issues), selectinload(BloodRequest.reserved_units))
+    stmt = (select(BloodRequest).where(BloodRequest.facility_id == facility_id_of(user))
+            .options(selectinload(BloodRequest.issues), selectinload(BloodRequest.reserved_units)))
     if status == "open":
         stmt = stmt.where(BloodRequest.status.in_(OPEN_REQUEST_STATUSES))
     elif status in RequestStatus:
@@ -59,7 +61,7 @@ async def create_request(request: Request, user: User = Depends(current_user), d
 
 
 def _detail_ctx(db: Session, req: BloodRequest, errors: dict | None = None, form: dict | None = None) -> dict:
-    counts = available_count_by_group(db)
+    counts = available_count_by_group(db, req.facility_id)
     groups = compatible_donor_groups(req.blood_group)
     return {"req": req, "errors": errors or {}, "form": form or {},
             "compatible": [(g.value, counts[g.value], g == req.blood_group) for g in groups],
@@ -69,7 +71,7 @@ def _detail_ctx(db: Session, req: BloodRequest, errors: dict | None = None, form
 @router.get("/{req_id}")
 def request_detail(request: Request, req_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
     expire_overdue_units(db)
-    req = get_or_404(db, BloodRequest, req_id)
+    req = get_owned_or_404(db, BloodRequest, req_id, user)
     db.refresh(req)
     return render(request, "requests/detail.html", _detail_ctx(db, req))
 
@@ -77,7 +79,7 @@ def request_detail(request: Request, req_id: int, user: User = Depends(current_u
 @router.post("/{req_id}/approve")
 async def approve(request: Request, req_id: int, user: User = Depends(require_authorizer),
                   db: Session = Depends(get_db)):
-    req = get_or_404(db, BloodRequest, req_id)
+    req = get_owned_or_404(db, BloodRequest, req_id, user)
     raw = await form_dict(request)
     try:
         n = req_svc.approve_and_reserve(db, req, user, note=raw.get("note"))
@@ -93,7 +95,7 @@ async def approve(request: Request, req_id: int, user: User = Depends(require_au
 @router.post("/{req_id}/reject")
 async def reject(request: Request, req_id: int, user: User = Depends(require_authorizer),
                  db: Session = Depends(get_db)):
-    req = get_or_404(db, BloodRequest, req_id)
+    req = get_owned_or_404(db, BloodRequest, req_id, user)
     raw = await form_dict(request)
     try:
         req_svc.reject_request(db, req, user, str(raw.get("reason") or ""))
@@ -105,7 +107,7 @@ async def reject(request: Request, req_id: int, user: User = Depends(require_aut
 
 @router.post("/{req_id}/cancel")
 async def cancel(request: Request, req_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    req = get_or_404(db, BloodRequest, req_id)
+    req = get_owned_or_404(db, BloodRequest, req_id, user)
     raw = await form_dict(request)
     try:
         req_svc.cancel_request(db, req, user, raw.get("reason"))
@@ -117,7 +119,7 @@ async def cancel(request: Request, req_id: int, user: User = Depends(current_use
 
 @router.post("/{req_id}/issue")
 async def issue(request: Request, req_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    req = get_or_404(db, BloodRequest, req_id)
+    req = get_owned_or_404(db, BloodRequest, req_id, user)
     raw = await form_dict(request)
     raw.setdefault("unit_ids", [])
     data, errors = validate(IssueIn, dict(raw))

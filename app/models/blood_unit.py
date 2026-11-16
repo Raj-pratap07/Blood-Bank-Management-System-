@@ -21,6 +21,8 @@ class BloodUnit(Base):
     __tablename__ = "blood_units"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # Owning facility (Phase 3). Required and immutable: enforced by database triggers (migration v3).
+    facility_id: Mapped[int | None] = mapped_column(ForeignKey("facilities.id"), index=True)
     unit_code: Mapped[str] = mapped_column(String(30), unique=True, index=True)
     donation_id: Mapped[int] = mapped_column(ForeignKey("donations.id"), index=True)
     product: Mapped[Product] = mapped_column(db_enum(Product), default=Product.WHOLE_BLOOD)

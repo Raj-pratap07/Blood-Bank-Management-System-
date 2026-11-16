@@ -9,15 +9,16 @@ from app.schemas.forms import DonorIn
 from app.services import donors as donor_svc
 from app.services.eligibility import check_donor
 from app.services.errors import ServiceError
-from app.web import Page, current_user, flash, form_dict, get_or_404, redirect, render, require_authorizer, validate
+from app.services.scope import facility_id_of
+from app.web import Page, current_user, flash, form_dict, get_owned_or_404, redirect, render, require_authorizer, require_facility_user, validate
 
-router = APIRouter(prefix="/donors")
+router = APIRouter(prefix="/donors", dependencies=[Depends(require_facility_user)])
 
 
 @router.get("")
 def list_donors(request: Request, q: str = "", group: str = "", eligible: str = "", inactive: bool = False,
                 page: int = 1, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    stmt = donor_svc.search_donors(db, q, group, include_inactive=inactive)
+    stmt = donor_svc.search_donors(db, facility_id_of(user), q, group, include_inactive=inactive)
     if eligible in ("yes", "no"):
         # Eligibility is computed in Python (depends on dates + history), then paginated.
         all_donors = list(db.scalars(stmt))
@@ -46,7 +47,7 @@ async def create_donor(request: Request, user: User = Depends(current_user), db:
     data, errors = validate(DonorIn, dict(raw))
     if not errors:
         try:
-            donor = donor_svc.create_donor(db, data)
+            donor = donor_svc.create_donor(db, data, user)
             flash(request, f"Donor {donor.full_name} registered.")
             return redirect(f"/donors/{donor.id}")
         except ServiceError as e:
@@ -56,14 +57,14 @@ async def create_donor(request: Request, user: User = Depends(current_user), db:
 
 @router.get("/{donor_id}")
 def donor_detail(request: Request, donor_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    donor = get_or_404(db, Donor, donor_id)
+    donor = get_owned_or_404(db, Donor, donor_id, user)
     return render(request, "donors/detail.html", {"donor": donor, "elig": check_donor(donor)})
 
 
 @router.get("/{donor_id}/edit")
 def edit_donor_form(request: Request, donor_id: int, user: User = Depends(current_user),
                     db: Session = Depends(get_db)):
-    donor = get_or_404(db, Donor, donor_id)
+    donor = get_owned_or_404(db, Donor, donor_id, user)
     form = {c: getattr(donor, c) for c in DonorIn.model_fields}
     form = {k: (v.value if hasattr(v, "value") else v) for k, v in form.items()}
     return render(request, "donors/form.html", {"form": form, "errors": {}, "donor": donor})
@@ -72,12 +73,12 @@ def edit_donor_form(request: Request, donor_id: int, user: User = Depends(curren
 @router.post("/{donor_id}/edit")
 async def update_donor(request: Request, donor_id: int, user: User = Depends(current_user),
                        db: Session = Depends(get_db)):
-    donor = get_or_404(db, Donor, donor_id)
+    donor = get_owned_or_404(db, Donor, donor_id, user)
     raw = await form_dict(request)
     data, errors = validate(DonorIn, dict(raw))
     if not errors:
         try:
-            donor_svc.update_donor(db, donor, data)
+            donor_svc.update_donor(db, donor, data, user)
             flash(request, "Donor details updated.")
             return redirect(f"/donors/{donor.id}")
         except ServiceError as e:
@@ -88,7 +89,7 @@ async def update_donor(request: Request, donor_id: int, user: User = Depends(cur
 @router.post("/{donor_id}/toggle")
 def toggle_donor(request: Request, donor_id: int, user: User = Depends(require_authorizer),
                  db: Session = Depends(get_db)):
-    donor = get_or_404(db, Donor, donor_id)
-    donor_svc.set_donor_active(db, donor, not donor.is_active)
+    donor = get_owned_or_404(db, Donor, donor_id, user)
+    donor_svc.set_donor_active(db, donor, not donor.is_active, user)
     flash(request, f"Donor {'reactivated' if donor.is_active else 'deactivated'}.")
     return redirect(f"/donors/{donor.id}")

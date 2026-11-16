@@ -85,7 +85,7 @@ def check_secret_key(app_env: str | None, secret_key: str | None) -> None:
 
 
 class Settings:
-    app_name: str = "Blood Bank Management System"
+    app_name: str = "Haldwani BloodLink"
     app_env: str = os.getenv("APP_ENV", "development")
     secret_key: str = _env("SECRET_KEY", DEV_SECRET_KEY)
     database_url: str = _env("DATABASE_URL", f"sqlite:///{(BASE_DIR / 'bloodbank.db').as_posix()}")
@@ -113,6 +113,32 @@ class Settings:
     bp_diastolic_range: tuple[int, int] = (60, 90)
     pulse_range: tuple[int, int] = (60, 100)
     max_temperature_c: float = _env("MAX_TEMP_C", 37.5, float)
+
+    # --- Facility directory (Haldwani BloodLink) ----------------------------
+    # A positive verification older than this is shown as "outdated" until re-checked.
+    verification_max_age_days: int = _env("VERIFICATION_MAX_AGE_DAYS", 180, int)
+
+    # --- Public map (Haldwani BloodLink Phase 2) ------------------------------
+    # OpenStreetMap's tile server is for light use only and requires attribution:
+    # https://operations.osmfoundation.org/policies/tiles/ . Point this at another
+    # provider (and update the attribution) if traffic grows.
+    map_tile_url: str = _env("MAP_TILE_URL", "https://tile.openstreetmap.org/{z}/{x}/{y}.png")
+    map_attribution: str = _env(
+        "MAP_ATTRIBUTION",
+        '&copy; <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> contributors')
+    # Initial map view when no facility location is verified. NOT a facility location.
+    # Source: OpenStreetMap Nominatim, "Haldwani, Nainital, Uttarakhand, India" (way 112883732).
+    map_default_center: tuple[float, float] = (29.2144809, 79.5279012)
+    map_default_zoom: int = 13
+
+    # --- Published availability (Phase 4) -----------------------------------
+    # A publication is valid for min(facility.stock_max_age_hours, this ceiling). 24 h matches the
+    # daily stock-update duty of licensed blood centres on e-RaktKosh; facilities may choose less.
+    availability_max_hours: int = _env("AVAILABILITY_MAX_HOURS", 24, int)
+    # "banded" display: 0 = Not available, 1..LOW_MAX = Low, more = Available.
+    availability_low_max: int = _env("AVAILABILITY_LOW_MAX", 2, int)
+    # One-time setup links for onboarded facility administrators.
+    setup_link_valid_hours: int = _env("SETUP_LINK_VALID_HOURS", 72, int)
 
     page_size: int = 20
 
@@ -147,6 +173,11 @@ def validate_settings(s: Settings) -> None:
     need(s.interval_female_days >= 1, "BBMS_INTERVAL_FEMALE_DAYS", "must be at least 1 day")
     need(0 < s.min_hemoglobin_g_dl < 25, "BBMS_MIN_HB", "must be between 0 and 25 g/dL")
     need(35 <= s.max_temperature_c <= 42, "BBMS_MAX_TEMP_C", "must be between 35 and 42 °C")
+    need(30 <= s.verification_max_age_days <= 730, "BBMS_VERIFICATION_MAX_AGE_DAYS",
+         "must be between 30 and 730 days")
+    need(1 <= s.availability_max_hours <= 48, "BBMS_AVAILABILITY_MAX_HOURS", "must be between 1 and 48 hours")
+    need(1 <= s.availability_low_max <= 20, "BBMS_AVAILABILITY_LOW_MAX", "must be between 1 and 20 units")
+    need(1 <= s.setup_link_valid_hours <= 168, "BBMS_SETUP_LINK_VALID_HOURS", "must be between 1 and 168 hours")
     if problems:
         raise ConfigurationError("Invalid configuration: " + "; ".join(problems))
 

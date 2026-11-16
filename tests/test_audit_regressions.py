@@ -135,8 +135,8 @@ class TestScreeningWithoutDecision:
 
 # Defect 5: dashboard "Registered donors" excluded inactive donors.
 class TestDashboardDonorCount:
-    def test_counts_all_registered_donors(self, db, make_donor):
+    def test_counts_all_registered_donors(self, db, fid, make_donor):
         make_donor(); inactive = make_donor()
         inactive.is_active = False
         db.commit()
-        assert dashboard_counts(db)["donors"] == 2
+        assert dashboard_counts(db, fid)["donors"] == 2

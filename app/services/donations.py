@@ -10,6 +10,7 @@ from app.models import BloodUnit, Donation, DonationStatus, Donor, Product, Unit
 from app.schemas.forms import DonationIn, ScreeningIn
 from app.services.eligibility import Vitals, check_donor
 from app.services.errors import EligibilityError, PermissionDenied, ServiceError
+from app.services.scope import ensure_owned, facility_id_of
 from app.services.tx import transaction
 from app.utils import utcnow
 
@@ -20,9 +21,12 @@ def unit_code_for(donation: Donation) -> str:
 
 def record_donation(db: Session, donor: Donor, data: DonationIn, actor: User) -> Donation:
     """Record a collection. The bag goes into QUARANTINE until screening is accepted."""
+    fid = facility_id_of(actor)
+    ensure_owned(donor, actor, "Donor")
     cleared_by = db.get(User, data.cleared_by_id)
-    if cleared_by is None or not cleared_by.is_active or not cleared_by.can_authorize:
-        raise ServiceError("Donor clearance must be given by an active medical officer or administrator.")
+    if cleared_by is None or not cleared_by.is_active or not cleared_by.can_authorize             or cleared_by.facility_id != fid:
+        raise ServiceError("Donor clearance must be given by an active medical officer or administrator "
+                           "of this blood bank.")
 
     vitals = Vitals(
         weight_kg=data.weight_kg, hemoglobin_g_dl=data.hemoglobin_g_dl, bp_systolic=data.bp_systolic,
@@ -35,7 +39,7 @@ def record_donation(db: Session, donor: Donor, data: DonationIn, actor: User) ->
 
     with transaction(db):
         donation = Donation(
-            donor=donor, donation_date=data.donation_date, blood_group=donor.blood_group,
+            facility_id=fid, donor=donor, donation_date=data.donation_date, blood_group=donor.blood_group,
             product=Product.WHOLE_BLOOD, volume_ml=data.volume_ml, units_collected=1,
             status=DonationStatus.QUARANTINE, weight_kg=data.weight_kg,
             hemoglobin_g_dl=data.hemoglobin_g_dl, bp_systolic=data.bp_systolic,
@@ -46,7 +50,7 @@ def record_donation(db: Session, donor: Donor, data: DonationIn, actor: User) ->
         db.add(donation)
         db.flush()  # assigns donation.id for the bag code
         db.add(BloodUnit(
-            unit_code=unit_code_for(donation), donation=donation, product=Product.WHOLE_BLOOD,
+            facility_id=fid, unit_code=unit_code_for(donation), donation=donation, product=Product.WHOLE_BLOOD,
             blood_group=donation.blood_group, volume_ml=data.volume_ml,
             collected_on=data.donation_date,
             expires_on=data.donation_date + timedelta(days=settings.shelf_life_days),
@@ -61,6 +65,7 @@ def screen_donation(db: Session, donation: Donation, data: ScreeningIn, actor: U
     """Record lab screening. Only an accepted donation releases its bag to AVAILABLE stock."""
     if not actor.can_authorize:
         raise PermissionDenied("Only a medical officer or administrator can complete screening.")
+    ensure_owned(donation, actor, "Donation")
     if donation.status != DonationStatus.QUARANTINE:
         raise ServiceError("Screening has already been completed for this donation.")
     on = on or date.today()

@@ -18,11 +18,18 @@ def post(client, url: str, data: dict, page: str | None = None):
 
 # ------------------------------------------------------------- authentication
 class TestAuthentication:
-    @pytest.mark.parametrize("path", ["/", "/donors", "/donations/new", "/inventory", "/requests", "/issues",
-                                      "/reports/inventory", "/users"])
+    @pytest.mark.parametrize("path", ["/donors", "/donations/new", "/inventory", "/requests", "/issues",
+                                      "/reports/inventory", "/users", "/platform/facilities"])
     def test_pages_require_login(self, client, path):
         r = client.get(path, follow_redirects=False)
         assert r.status_code == 303 and r.headers["location"].startswith("/login")
+
+    def test_root_is_public_landing_for_anonymous_and_dashboard_for_staff(self, client):
+        # Phase 2 (approved): anonymous "/" shows the public landing page, never operational data.
+        r = client.get("/", follow_redirects=False)
+        assert r.status_code == 200 and "Find a blood bank in Haldwani" in r.text and "Recent donations" not in r.text
+        login(client, "staff")
+        assert "Recent donations" in client.get("/").text
 
     def test_api_requires_login(self, client):
         assert client.get("/api/stats/inventory").status_code == 401
@@ -31,7 +38,9 @@ class TestAuthentication:
         assert login(client, "staff").status_code == 303
         assert client.get("/").status_code == 200
         post(client, "/logout", {})
-        assert client.get("/", follow_redirects=False).status_code == 303
+        # Logged out: "/" is now the public landing page (Phase 2), and staff pages require login again.
+        assert "Recent donations" not in client.get("/").text
+        assert client.get("/donors", follow_redirects=False).status_code == 303
 
     def test_wrong_password(self, client):
         r = login(client, "staff", "wrong-password")

@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
+from app import log_redaction
 from app.config import (
     BASE_DIR,
     check_secret_key,
@@ -21,11 +22,37 @@ from app.config import (
     validate_settings,
 )
 from app.database import init_db
-from app.routers import api, auth, dashboard, donations, donors, inventory, issues, reports, requests, users
-from app.web import CSRFError, Forbidden, NotAuthenticated, csrf_protect, redirect, render
+from app.routers import (
+    api,
+    auth,
+    availability,
+    dashboard,
+    donations,
+    donors,
+    inventory,
+    issues,
+    platform,
+    public,
+    reports,
+    requests,
+    users,
+)
+from app.web import (
+    CSRFError,
+    Forbidden,
+    NotAuthenticated,
+    PasswordChangeRequired,
+    csrf_protect,
+    flash,
+    redirect,
+    render,
+)
 
 
 def create_app(init: bool = True) -> FastAPI:
+    # Setup tokens must never reach a log line (access log, error log or traceback).
+    log_redaction.install()
+
     # Fail fast (before serving anything) on invalid settings or a dev/weak production secret key.
     validate_settings(settings)
     check_secret_key(settings.app_env, settings.secret_key)
@@ -36,6 +63,7 @@ def create_app(init: bool = True) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
+        log_redaction.install()            # again at start-up: covers handlers configured after import
         if init:
             init_db()
         yield
@@ -48,7 +76,7 @@ def create_app(init: bool = True) -> FastAPI:
     )
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "app" / "static")), name="static")
 
-    for r in (auth, dashboard, donors, donations, inventory, requests, issues, reports, users, api):
+    for r in (auth, dashboard, public, donors, donations, inventory, requests, issues, reports, users, api, platform, availability):
         app.include_router(r.router)
 
     @app.middleware("http")
@@ -65,6 +93,13 @@ def create_app(init: bool = True) -> FastAPI:
             return JSONResponse({"detail": "Not authenticated"}, status_code=401)
         nxt = request.url.path + (f"?{request.url.query}" if request.url.query else "")
         return redirect(f"/login?next={quote(nxt)}")
+
+    @app.exception_handler(PasswordChangeRequired)
+    async def _must_change(request: Request, _exc):
+        if request.url.path.startswith("/api/"):
+            return JSONResponse({"detail": "Password change required"}, status_code=403)
+        flash(request, "Please choose your own password before continuing.", "warning")
+        return redirect("/account/password")
 
     @app.exception_handler(Forbidden)
     async def _forbidden(request: Request, _exc):
@@ -101,7 +136,8 @@ def create_app(init: bool = True) -> FastAPI:
 
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception):
-        logger.exception("Unhandled error on %s %s", request.method, request.url.path, exc_info=exc)
+        logger.exception("Unhandled error on %s %s", request.method, log_redaction.redact(request.url.path),
+                         exc_info=exc)
         if request.url.path.startswith("/api/"):
             return JSONResponse({"detail": "Internal server error"}, status_code=500)
         return render(request, "errors/error.html", {

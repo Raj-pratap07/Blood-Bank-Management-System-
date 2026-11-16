@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}Facility directory{% endblock %}
+{% block content %}
+{% call m.page_header("Facility directory", "Haldwani BloodLink · platform administration") %}
+  <a class="btn btn-bb" href="/platform/facilities/new"><i class="bi bi-plus-lg"></i> Add facility</a>
+{% endcall %}
+
+<div class="alert alert-secondary small">
+  <i class="bi bi-shield-check"></i> Every fact about a real facility must be entered together with its source.
+  Trust comes only from the verification log. Public listing (Phase 2) requires a confirmed identity,
+  an address and a sourced public phone number. Map markers additionally require a confirmed location.
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr><th class="ps-3">Facility</th><th>Ownership</th><th>Identity</th><th>Location</th><th>Services</th>
+        <th>Contacts</th><th>Listing</th></tr></thead>
+      <tbody>
+      {% for f, summary, blockers in rows %}
+        <tr>
+          <td class="ps-3">
+            <a href="/platform/facilities/{{ f.id }}" class="fw-semibold">{{ f.display_name }}</a>
+            {% if f.is_demo %}<span class="badge text-bg-dark">Fictional demo</span>{% endif %}
+            {% if f.official_name and f.official_name != f.display_name %}<div class="small text-muted">{{ f.official_name }}</div>{% endif %}
+          </td>
+          <td>{{ f.ownership | label }}</td>
+          <td>{{ m.vbadge(summary.identity) }}</td>
+          <td>{{ m.vbadge(summary.location) }}</td>
+          <td>{{ m.vbadge(summary.services) }}</td>
+          <td>{{ f.contacts | selectattr('is_active') | list | length }}</td>
+          <td>{% if f.is_listed %}<span class="badge text-bg-success">Listed</span>
+              {% else %}<span class="badge text-bg-secondary" title="{{ blockers | join(' ') }}">Not listed</span>{% endif %}</td>
+        </tr>
+      {% else %}{{ m.empty(7, "No facilities yet.") }}{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

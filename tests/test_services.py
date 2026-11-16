@@ -42,12 +42,12 @@ class TestDonorRegistration:
         donor = make_donor(group=G.B_NEG, name="Asha Verma")
         assert donor.id and donor.blood_group == G.B_NEG and donor.full_name == "Asha Verma"
 
-    def test_duplicate_phone_rejected(self, db, make_donor):
+    def test_duplicate_phone_rejected(self, db, users, make_donor):
         donor = make_donor()
         data = DonorIn(full_name="Other Person", gender="female", date_of_birth=date(1995, 1, 1),
                        blood_group="A+", phone=donor.phone, weight_kg=60)
         with pytest.raises(ServiceError, match="already registered"):
-            donor_svc.create_donor(db, data)
+            donor_svc.create_donor(db, data, users['staff'])
 
     @pytest.mark.parametrize("field,value", [
         ("blood_group", "Z+"), ("phone", "abc"), ("weight_kg", 5), ("email", "not-an-email"),
@@ -117,7 +117,7 @@ class TestDonationScreening:
         unit = make_unit(accept=False)
         donation_svc.screen_donation(db, unit.donation, screening("accept"), users["medical_officer"])
         assert unit.status == UnitStatus.AVAILABLE
-        assert stock_summary(db)[[g.value for g in G].index("O+")]["available"] == 1
+        assert stock_summary(db, users['staff'].facility_id)[[g.value for g in G].index("O+")]["available"] == 1
 
     def test_rejection_discards_bag(self, db, users, make_unit):
         unit = make_unit(accept=False)
@@ -152,14 +152,14 @@ class TestExpiry:
     def test_expired_not_offered_or_reserved(self, db, users, make_unit):
         make_unit(G.A_POS, days_ago=36)
         req = make_request(db, users, G.A_POS, 1)
-        assert fefo_candidates(db, G.A_POS) == []
+        assert fefo_candidates(db, users['staff'].facility_id, G.A_POS) == []
         with pytest.raises(InventoryError, match="No unexpired"):
             req_svc.approve_and_reserve(db, req, users["medical_officer"])
 
-    def test_expiry_on_last_day_is_still_usable(self, db, make_unit):
+    def test_expiry_on_last_day_is_still_usable(self, db, users, make_unit):
         unit = make_unit(days_ago=35)
         assert not unit.is_expired()
-        assert fefo_candidates(db, G.O_POS) == [unit]
+        assert fefo_candidates(db, users['staff'].facility_id, G.O_POS) == [unit]
 
     def test_expired_reserved_unit_cannot_be_issued(self, db, users, make_unit):
         unit = make_unit(G.A_POS, days_ago=30)
@@ -186,13 +186,13 @@ class TestCompatibility:
         assert all(is_compatible(r, "O-") for r in G)
         assert all(is_compatible("AB+", d) for d in G)
 
-    def test_fefo_prefers_identical_then_earliest_expiry(self, db, make_unit):
+    def test_fefo_prefers_identical_then_earliest_expiry(self, db, users, make_unit):
         o_neg = make_unit(G.O_NEG, days_ago=30)
         a_old = make_unit(G.A_POS, days_ago=20)
         a_new = make_unit(G.A_POS, days_ago=2)
         b_pos = make_unit(G.B_POS, days_ago=25)  # incompatible with A+
-        assert fefo_candidates(db, G.A_POS) == [a_old, a_new, o_neg]
-        assert b_pos not in fefo_candidates(db, G.A_POS)
+        assert fefo_candidates(db, users['staff'].facility_id, G.A_POS) == [a_old, a_new, o_neg]
+        assert b_pos not in fefo_candidates(db, users['staff'].facility_id, G.A_POS)
 
 
 # ---------------------------------------------------- reservation + issue
