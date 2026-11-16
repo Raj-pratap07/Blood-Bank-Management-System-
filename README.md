@@ -52,7 +52,7 @@ the app anywhere other than your own machine.
 ```bash
 pytest -q
 ```
-There are 139 tests. They use a temporary database per test and never touch `bloodbank.db`.
+There are 212 tests. They use a temporary database per test and never touch `bloodbank.db`.
 
 ---
 
@@ -153,7 +153,8 @@ that shows compatibility carries the preliminary-check disclaimer.
 
 ## 4. Security
 - **Authentication:** bcrypt password hashing (cost 12). Sessions are signed (`itsdangerous`) cookies
-  with HttpOnly and SameSite=Lax set and an 8-hour lifetime. The session is cleared on login to
+  with HttpOnly and SameSite=Lax set and an 8-hour lifetime. With `APP_ENV=production` the cookie is
+  also marked **Secure** (sent over HTTPS only). The session is cleared on login to
   prevent session fixation, and login time is the same whether or not the username exists.
 - **Authorisation:** `require_admin` and `require_authorizer` dependencies, plus checks inside the
   service layer.
@@ -233,7 +234,8 @@ Running the script without `--reset` does nothing if the database already has da
 | `BBMS_DATABASE_URL` | `sqlite:///./bloodbank.db` |
 | `BBMS_SHELF_LIFE_DAYS` | `35` |
 | `BBMS_NEAR_EXPIRY_DAYS` | `7` |
-| `BBMS_SESSION_MAX_AGE` | `28800` (seconds) |
+| `BBMS_SESSION_MAX_AGE` | `28800` (seconds, minimum 60) |
+| `BBMS_SESSION_HTTPS_ONLY` | automatic: `true` when `APP_ENV=production`, otherwise `false`. Accepts true/false/1/0/yes/no/on/off |
 | eligibility thresholds | see section 3 |
 
 **Production secret key.** The secret key signs login sessions, so anyone who knows it can forge a
@@ -245,6 +247,18 @@ export BBMS_SECRET_KEY='<generated value>'
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 Local development needs neither variable.
+
+**HTTPS is required in production.** With `APP_ENV=production`, session cookies get the `Secure`
+flag, so browsers send them only over HTTPS. Over plain `http://`, login cannot keep a session and
+forms fail with "Form expired". Put the app behind an HTTPS reverse proxy (for example nginx or Caddy
+with a TLS certificate). `BBMS_SESSION_HTTPS_ONLY=false` disables the flag. That is unsafe because
+cookies can then be captured on the network, and the app logs a warning at start-up.
+
+**Start-up validation.** Every `BBMS_*` number is checked when the app starts (and when the seed
+script runs). A malformed value such as `abc` or `nan`, or an out-of-range value, stops start-up with
+a `ConfigurationError` that names the variable. Out-of-range examples: a shelf life outside 1–365
+days, a near-expiry window not shorter than the shelf life, minimum age above maximum age, or a zero
+interval. These are software sanity limits, not clinical validation of the values chosen.
 
 ## 8. Database schema changes (migrations)
 `init_db()` runs on every start-up. It does two things:

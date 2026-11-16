@@ -8,27 +8,55 @@ Override any value with an environment variable of the same name prefixed by
 """
 from __future__ import annotations
 
+import math
 import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+class ConfigurationError(RuntimeError):
+    """Raised at start-up when a setting is missing, malformed or out of range."""
+
+
+class InsecureConfigurationError(ConfigurationError):
+    """Raised at start-up when production settings are unsafe."""
+
+
+_TRUE, _FALSE = {"1", "true", "yes", "on"}, {"0", "false", "no", "off"}
+
+
+def _bool(raw: str) -> bool:
+    value = raw.strip().lower()
+    if value in _TRUE:
+        return True
+    if value in _FALSE:
+        return False
+    raise ValueError(raw)
+
+
+_TYPE_NAMES = {int: "a whole number", float: "a number", _bool: "true or false"}
+
+
 def _env(name: str, default, cast=str):
     raw = os.getenv(f"BBMS_{name}")
     if raw is None:
         return default
-    return cast(raw)
+    try:
+        value = cast(raw.strip()) if cast is not str else raw
+    except ValueError:
+        raise ConfigurationError(
+            f"BBMS_{name}={raw!r} is invalid: expected {_TYPE_NAMES.get(cast, cast.__name__)}."
+        ) from None
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ConfigurationError(f"BBMS_{name}={raw!r} is invalid: expected a finite number.")
+    return value
 
 
 # Signs session cookies in local development only. Anyone who knows it can forge
 # a session, so production start-up refuses it (see `check_secret_key`).
 DEV_SECRET_KEY = "dev-only-insecure-secret-change-me"
 MIN_PRODUCTION_SECRET_LENGTH = 32
-
-
-class InsecureConfigurationError(RuntimeError):
-    """Raised at start-up when production settings are unsafe."""
 
 
 def is_production(app_env: str | None) -> bool:
@@ -62,6 +90,9 @@ class Settings:
     secret_key: str = _env("SECRET_KEY", DEV_SECRET_KEY)
     database_url: str = _env("DATABASE_URL", f"sqlite:///{(BASE_DIR / 'bloodbank.db').as_posix()}")
     session_max_age_seconds: int = _env("SESSION_MAX_AGE", 8 * 60 * 60, int)
+    # Secure cookie flag. None = automatic: on when APP_ENV=production, off otherwise
+    # (local development runs over plain HTTP). Set true/false to override.
+    session_https_only: bool | None = _env("SESSION_HTTPS_ONLY", None, _bool)
 
     # --- Inventory --------------------------------------------------------
     # Whole blood in CPDA-1 is the only product supported in this MVP.
@@ -86,4 +117,39 @@ class Settings:
     page_size: int = 20
 
 
+def session_cookie_secure(s: Settings) -> bool:
+    """Whether the session cookie gets the Secure flag (sent over HTTPS only)."""
+    return s.session_https_only if s.session_https_only is not None else is_production(s.app_env)
+
+
+def validate_settings(s: Settings) -> None:
+    """Range/consistency checks; raises one ConfigurationError listing every problem.
+
+    These are software sanity limits (no zero shelf life, min age below max age...),
+    not clinical validation of the chosen thresholds.
+    """
+    problems: list[str] = []
+
+    def need(ok: bool, env: str, msg: str) -> None:
+        if not ok:
+            problems.append(f"{env}: {msg}")
+
+    need(s.session_max_age_seconds >= 60, "BBMS_SESSION_MAX_AGE", "must be at least 60 seconds")
+    need(1 <= s.shelf_life_days <= 365, "BBMS_SHELF_LIFE_DAYS", "must be between 1 and 365 days")
+    need(0 <= s.near_expiry_days < max(s.shelf_life_days, 1), "BBMS_NEAR_EXPIRY_DAYS",
+         "must be 0 or more and less than the shelf life")
+    need(1 <= s.min_age <= s.max_age_first_time <= s.max_age <= 100,
+         "BBMS_MIN_AGE / BBMS_MAX_AGE_FIRST_TIME / BBMS_MAX_AGE",
+         "must satisfy 1 <= min age <= first-time max age <= max age <= 100")
+    need(0 < s.min_weight_kg <= s.min_weight_450ml_kg <= 250, "BBMS_MIN_WEIGHT_KG / BBMS_MIN_WEIGHT_450ML_KG",
+         "must satisfy 0 < 350 ml minimum <= 450 ml minimum <= 250 kg")
+    need(s.interval_male_days >= 1, "BBMS_INTERVAL_MALE_DAYS", "must be at least 1 day")
+    need(s.interval_female_days >= 1, "BBMS_INTERVAL_FEMALE_DAYS", "must be at least 1 day")
+    need(0 < s.min_hemoglobin_g_dl < 25, "BBMS_MIN_HB", "must be between 0 and 25 g/dL")
+    need(35 <= s.max_temperature_c <= 42, "BBMS_MAX_TEMP_C", "must be between 35 and 42 °C")
+    if problems:
+        raise ConfigurationError("Invalid configuration: " + "; ".join(problems))
+
+
 settings = Settings()
+validate_settings(settings)  # fail fast for every entry point (web app, seed script, tests)

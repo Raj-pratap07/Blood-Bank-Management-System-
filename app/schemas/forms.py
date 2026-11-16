@@ -5,7 +5,15 @@ import re
 from datetime import date
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 from app.models.enums import BloodGroup, Gender, RequestPriority, Role, TestResult
 
@@ -22,7 +30,9 @@ class FormModel(BaseModel):
 def _phone(v: str) -> str:
     if not PHONE_RE.match(v):
         raise ValueError("Enter a valid phone number (digits, optional +, spaces or dashes).")
-    return v
+    # Store one canonical form so "98765 43210" and "98765-43210" match "9876543210"
+    # in the duplicate-donor check.
+    return re.sub(r"[\s-]", "", v)
 
 
 class DonorIn(FormModel):
@@ -140,7 +150,16 @@ class BloodRequestIn(FormModel):
         return v
 
 
-Password = Annotated[str, StringConstraints(min_length=8, max_length=72)]
+def _password_bytes(v: str) -> str:
+    # bcrypt hashes at most 72 *bytes*; bcrypt>=5 raises beyond that. Non-English
+    # characters take 2-4 bytes each, so a 72-character limit is not enough.
+    if len(v.encode("utf-8")) > 72:
+        raise ValueError("Password is too long: maximum 72 bytes (fewer characters when using "
+                         "non-English letters).")
+    return v
+
+
+Password = Annotated[str, StringConstraints(min_length=8, max_length=72), AfterValidator(_password_bytes)]
 
 
 class UserIn(FormModel):

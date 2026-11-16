@@ -12,15 +12,27 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.config import BASE_DIR, check_secret_key, settings
+from app.config import (
+    BASE_DIR,
+    check_secret_key,
+    is_production,
+    session_cookie_secure,
+    settings,
+    validate_settings,
+)
 from app.database import init_db
 from app.routers import api, auth, dashboard, donations, donors, inventory, issues, reports, requests, users
 from app.web import CSRFError, Forbidden, NotAuthenticated, csrf_protect, redirect, render
 
 
 def create_app(init: bool = True) -> FastAPI:
-    # Fail fast (before serving anything) if production uses the dev/weak secret key.
+    # Fail fast (before serving anything) on invalid settings or a dev/weak production secret key.
+    validate_settings(settings)
     check_secret_key(settings.app_env, settings.secret_key)
+    secure_cookie = session_cookie_secure(settings)
+    if is_production(settings.app_env) and not secure_cookie:
+        logger.warning("APP_ENV=production with BBMS_SESSION_HTTPS_ONLY=false: session cookies will be "
+                       "sent over plain HTTP. Serve the app over HTTPS and remove this override.")
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -32,7 +44,7 @@ def create_app(init: bool = True) -> FastAPI:
                   docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(
         SessionMiddleware, secret_key=settings.secret_key, session_cookie="bbms_session",
-        max_age=settings.session_max_age_seconds, same_site="lax", https_only=False,
+        max_age=settings.session_max_age_seconds, same_site="lax", https_only=secure_cookie,
     )
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "app" / "static")), name="static")
 

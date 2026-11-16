@@ -9,7 +9,7 @@ from app.models import User
 from app.services import reports
 from app.services.donors import search_donors
 from app.services.eligibility import check_donor
-from app.services.inventory import stock_summary
+from app.services.inventory import expire_overdue_units, stock_summary
 from app.web import current_user
 
 router = APIRouter(prefix="/api", dependencies=[Depends(current_user)])
@@ -17,6 +17,9 @@ router = APIRouter(prefix="/api", dependencies=[Depends(current_user)])
 
 @router.get("/stats/inventory")
 def inventory_stats(db: Session = Depends(get_db)):
+    # Same expiry sweep as the dashboard and inventory pages, so a direct API call never
+    # reports bags past their expiry date as available.
+    expire_overdue_units(db)
     stock = stock_summary(db)
     return {
         "labels": [r["group"] for r in stock],

@@ -66,7 +66,8 @@ async def reset_password(request: Request, user_id: int, actor: User = Depends(r
         user_svc.reset_password(db, target, pw, actor)
         flash(request, f"Password reset for '{target.username}'.")
     except ValidationError:
-        flash(request, "Password must be 8-72 characters.", "danger")
+        flash(request, "Password must be 8-72 characters and at most 72 bytes "
+                       "(fewer characters when using non-English letters).", "danger")
     except ServiceError as e:
         flash(request, e.message, "danger")
     return redirect("/users")

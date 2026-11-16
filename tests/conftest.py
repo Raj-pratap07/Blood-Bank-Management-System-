@@ -2,11 +2,18 @@ from __future__ import annotations
 
 import os
 import re
+import tempfile
 from datetime import date, timedelta
 
 import pytest
 
-# Use a throwaway DB/secret before the app modules read settings.
+# Isolate the suite from the developer's shell BEFORE app modules read settings:
+# - APP_ENV: an exported APP_ENV=production would otherwise make the app refuse to import.
+# - BBMS_DATABASE_URL: the module-level engine must never point at the real bloodbank.db,
+#   even if a test accidentally uses SessionLocal/init_db() without its own engine.
+os.environ["APP_ENV"] = "test"
+os.environ["BBMS_DATABASE_URL"] = "sqlite:///" + os.path.join(
+    tempfile.mkdtemp(prefix="bbms-tests-"), "default.db").replace("\\", "/")
 os.environ.setdefault("BBMS_SECRET_KEY", "test-secret")
 
 from sqlalchemy.orm import sessionmaker  # noqa: E402
