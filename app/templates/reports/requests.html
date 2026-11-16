@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}Blood request report{% endblock %}
+{% block content %}
+{{ m.page_header("Blood request report", (start | d) ~ " – " ~ (end | d)) }}
+{% set date_tz = "UTC" %}{% set date_basis = "the UTC date the request was registered" %}
+{% include "partials/report_filter.html" %}
+<div class="row g-3 mb-3">
+  {% for label, value in [("Requests", rows | length), ("Pending", totals.pending), ("Approved", totals.approved),
+                          ("Partially issued", totals.partially_issued), ("Fulfilled", totals.fulfilled),
+                          ("Rejected / cancelled", totals.rejected + totals.cancelled),
+                          ("Units issued / required", totals.units_issued ~ " / " ~ totals.units_required)] %}
+  <div class="col-6 col-md"><div class="card stat-card"><div class="card-body">
+    <div class="stat-value">{{ value }}</div><div class="stat-label">{{ label }}</div></div></div></div>
+  {% endfor %}
+</div>
+<div class="card"><div class="table-responsive">
+  <table class="table table-sm table-hover mb-0">
+    <thead><tr><th class="ps-3">Request</th><th>Created (UTC)</th><th>Patient</th><th>Group</th><th>Hospital</th><th>Priority</th><th>Required</th><th>Issued</th><th class="pe-3">Status</th></tr></thead>
+    <tbody>{% for r in rows %}
+      <tr><td class="ps-3"><a href="/requests/{{ r.id }}">{{ r.code }}</a></td><td>{{ r.created_at | d }}</td><td>{{ r.patient_name }}</td>
+          <td>{{ m.group(r.blood_group) }}</td><td>{{ r.hospital_name }}</td><td>{{ m.badge(r.priority) }}</td>
+          <td>{{ r.units_required }}</td><td>{{ r.units_issued }}</td><td class="pe-3">{{ m.badge(r.status) }}</td></tr>
+    {% else %}{{ m.empty(9) }}{% endfor %}</tbody>
+  </table>
+</div></div>
+{% endblock %}

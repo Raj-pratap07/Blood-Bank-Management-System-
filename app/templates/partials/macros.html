@@ -1,0 +1,106 @@
+{# Reusable UI components. Imported in base.html as `m` (with context). #}
+
+{% macro csrf() -%}
+<input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+{%- endmacro %}
+
+{% macro form_error(errors) -%}
+{% if errors and errors.get('__all__') %}
+<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> {{ errors['__all__'] }}</div>
+{% endif %}
+{%- endmacro %}
+
+{% macro field(name, label, form, errors, type="text", required=false, help=none, col="col-md-6") -%}
+<div class="{{ col }}">
+  <label class="form-label" for="f-{{ name }}">{{ label }}{% if required %} <span class="text-danger">*</span>{% endif %}</label>
+  <input type="{{ type }}" class="form-control {% if errors.get(name) %}is-invalid{% endif %}" id="f-{{ name }}"
+         name="{{ name }}" value="{{ form.get(name) if form.get(name) is not none else '' }}"
+         {% if required %}required{% endif %} {{ kwargs.get('attrs', '') | safe }}>
+  {% if errors.get(name) %}<div class="invalid-feedback">{{ errors[name] }}</div>{% endif %}
+  {% if help %}<div class="form-text">{{ help }}</div>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro select(name, label, options, form, errors, required=false, blank="— Select —", col="col-md-6") -%}
+{# options: list of (value, label) #}
+<div class="{{ col }}">
+  <label class="form-label" for="f-{{ name }}">{{ label }}{% if required %} <span class="text-danger">*</span>{% endif %}</label>
+  <select class="form-select {% if errors.get(name) %}is-invalid{% endif %}" id="f-{{ name }}" name="{{ name }}" {% if required %}required{% endif %}>
+    {% if blank %}<option value="">{{ blank }}</option>{% endif %}
+    {% for value, text in options %}
+    <option value="{{ value }}" {% if form.get(name) is not none and form.get(name)|string == value|string %}selected{% endif %}>{{ text }}</option>
+    {% endfor %}
+  </select>
+  {% if errors.get(name) %}<div class="invalid-feedback">{{ errors[name] }}</div>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro textarea(name, label, form, errors, rows=2, col="col-12") -%}
+<div class="{{ col }}">
+  <label class="form-label" for="f-{{ name }}">{{ label }}</label>
+  <textarea class="form-control {% if errors.get(name) %}is-invalid{% endif %}" id="f-{{ name }}" name="{{ name }}" rows="{{ rows }}">{{ form.get(name) or '' }}</textarea>
+  {% if errors.get(name) %}<div class="invalid-feedback">{{ errors[name] }}</div>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro checkbox(name, label, form, errors, col="col-12") -%}
+<div class="{{ col }}">
+  <div class="form-check">
+    <input class="form-check-input {% if errors.get(name) %}is-invalid{% endif %}" type="checkbox" id="f-{{ name }}" name="{{ name }}" value="true"
+           {% if form.get(name) in (true, 'true', 'on') %}checked{% endif %}>
+    <label class="form-check-label" for="f-{{ name }}">{{ label }}</label>
+    {% if errors.get(name) %}<div class="invalid-feedback">{{ errors[name] }}</div>{% endif %}
+  </div>
+</div>
+{%- endmacro %}
+
+{% set STATUS_CLASSES = {
+  'available': 'success', 'accepted': 'success', 'fulfilled': 'success', 'non_reactive': 'success',
+  'quarantine': 'warning', 'pending': 'warning', 'partially_issued': 'info',
+  'reserved': 'primary', 'approved': 'primary',
+  'issued': 'secondary', 'cancelled': 'secondary',
+  'expired': 'danger', 'discarded': 'dark', 'rejected': 'danger', 'reactive': 'danger',
+  'emergency': 'danger', 'urgent': 'warning', 'routine': 'secondary',
+} %}
+
+{% macro badge(value) -%}
+{% set v = value.value if value.value is defined else value %}
+<span class="badge text-bg-{{ STATUS_CLASSES.get(v, 'secondary') }} bb-badge">{{ v | label }}</span>
+{%- endmacro %}
+
+{% macro group(g) -%}
+{% set v = g.value if g.value is defined else g %}
+<span class="bb-group">{{ v }}</span>
+{%- endmacro %}
+
+{% macro pagination(page) -%}
+{% if page.pages > 1 %}
+<nav class="d-print-none"><ul class="pagination pagination-sm mb-0">
+  <li class="page-item {% if page.page <= 1 %}disabled{% endif %}">
+    <a class="page-link" href="{{ request.url.include_query_params(page=page.page - 1) }}">‹ Prev</a></li>
+  <li class="page-item disabled"><span class="page-link">Page {{ page.page }} of {{ page.pages }} ({{ page.total }})</span></li>
+  <li class="page-item {% if page.page >= page.pages %}disabled{% endif %}">
+    <a class="page-link" href="{{ request.url.include_query_params(page=page.page + 1) }}">Next ›</a></li>
+</ul></nav>
+{% else %}
+<span class="text-muted small">{{ page.total }} record(s)</span>
+{% endif %}
+{%- endmacro %}
+
+{% macro disclaimer(text) -%}
+<div class="alert alert-secondary small py-2 mb-3"><i class="bi bi-info-circle"></i> {{ text }}</div>
+{%- endmacro %}
+
+{% macro page_header(title, subtitle=none) -%}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+  <div>
+    <h1 class="h3 mb-0">{{ title }}</h1>
+    {% if subtitle %}<div class="text-muted small">{{ subtitle }}</div>{% endif %}
+  </div>
+  <div class="d-flex gap-2 d-print-none">{{ caller() if caller else '' }}</div>
+</div>
+{%- endmacro %}
+
+{% macro empty(colspan, text="No records found.") -%}
+<tr><td colspan="{{ colspan }}" class="text-center text-muted py-4">{{ text }}</td></tr>
+{%- endmacro %}

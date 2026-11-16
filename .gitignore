@@ -1,0 +1,28 @@
+# Python / virtual environment
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local databases, journals and backups (may contain personal health data)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+backups/
+
+# Secrets and local configuration
+.env
+.env.*
+
+# Editor / OS / tooling
+.vscode/
+.idea/
+.claude/
+Thumbs.db
+.DS_Store
+*.log
+*.tmp

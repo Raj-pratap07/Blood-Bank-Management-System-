@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}{{ donor.full_name }}{% endblock %}
+{% block content %}
+{% call m.page_header(donor.full_name, "Donor #" ~ donor.id ~ " · registered " ~ (donor.created_at | d)) %}
+  {% if donor.is_active %}<a class="btn btn-bb" href="/donations/new?donor_id={{ donor.id }}"><i class="bi bi-droplet"></i> Record donation</a>{% endif %}
+  <a class="btn btn-outline-secondary" href="/donors/{{ donor.id }}/edit"><i class="bi bi-pencil"></i> Edit</a>
+  {% if user.can_authorize %}
+  <form method="post" action="/donors/{{ donor.id }}/toggle" data-confirm="{{ 'Deactivate' if donor.is_active else 'Reactivate' }} this donor?">
+    {{ m.csrf() }}<button class="btn btn-outline-{{ 'danger' if donor.is_active else 'success' }}">{{ 'Deactivate' if donor.is_active else 'Reactivate' }}</button>
+  </form>
+  {% endif %}
+{% endcall %}
+
+<div class="row g-3">
+  <div class="col-lg-5">
+    <div class="card mb-3">
+      <div class="card-header">Donor details</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-5">Blood group</dt><dd class="col-7">{{ m.group(donor.blood_group) }}</dd>
+          <dt class="col-5">Gender</dt><dd class="col-7">{{ donor.gender | label }}</dd>
+          <dt class="col-5">Date of birth</dt><dd class="col-7">{{ donor.date_of_birth | d }} ({{ elig.age }} yrs)</dd>
+          <dt class="col-5">Weight</dt><dd class="col-7">{{ donor.weight_kg }} kg</dd>
+          <dt class="col-5">Phone</dt><dd class="col-7">{{ donor.phone }}</dd>
+          <dt class="col-5">Email</dt><dd class="col-7">{{ donor.email or '—' }}</dd>
+          <dt class="col-5">Address</dt><dd class="col-7">{{ donor.address or '—' }}{% if donor.city %}, {{ donor.city }}{% endif %}</dd>
+          <dt class="col-5">Donations here</dt><dd class="col-7">{{ donor.donations | length }}</dd>
+          <dt class="col-5">Donated elsewhere</dt><dd class="col-7">{{ donor.last_external_donation_date | d }}</dd>
+          <dt class="col-5">Status</dt><dd class="col-7">{{ 'Active' if donor.is_active else 'Inactive' }}</dd>
+        </dl>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Preliminary eligibility (today)</div>
+      <div class="card-body">
+        {% if elig.eligible %}
+          <div class="alert alert-success mb-2"><i class="bi bi-check-circle"></i> Passes preliminary checks (age, weight, interval).</div>
+        {% else %}
+          <div class="alert alert-warning mb-2"><i class="bi bi-exclamation-triangle"></i> Does not pass preliminary checks:
+            <ul class="mb-0 mt-1">{% for r in elig.reasons %}<li>{{ r }}</li>{% endfor %}</ul></div>
+        {% endif %}
+        <ul class="small text-muted mb-2">
+          <li>{{ 'First-time donor' if elig.is_first_time else 'Repeat donor' }}</li>
+          <li>Minimum interval: {{ elig.interval_days }} days{% if elig.last_donation %}; last donation {{ elig.last_donation | d }}{% endif %}</li>
+          {% if elig.next_eligible_date %}<li>Next eligible: {{ elig.next_eligible_date | d }}</li>{% endif %}
+        </ul>
+        <div class="small text-muted"><i class="bi bi-info-circle"></i> {{ ELIGIBILITY_DISCLAIMER }} Haemoglobin, BP, pulse and temperature are checked when a donation is recorded.</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header">Donation history</div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr><th class="ps-3">Date</th><th>Donation</th><th>Volume</th><th>Hb</th><th>Bag</th><th>Screening</th><th class="pe-3">Bag status</th></tr></thead>
+          <tbody>
+          {% for d in donor.donations %}
+            <tr>
+              <td class="ps-3">{{ d.donation_date | d }}</td>
+              <td><a href="/donations/{{ d.id }}">{{ d.code }}</a></td>
+              <td>{{ d.volume_ml }} ml</td>
+              <td>{{ d.hemoglobin_g_dl }}</td>
+              <td>{% for u in d.units %}<a href="/inventory/units/{{ u.id }}" class="font-monospace small">{{ u.unit_code }}</a>{% endfor %}</td>
+              <td>{{ m.badge(d.status) }}</td>
+              <td class="pe-3">{% for u in d.units %}{{ m.badge(u.status) }}{% endfor %}</td>
+            </tr>
+          {% else %}{{ m.empty(7, "No donations recorded at this centre.") }}{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

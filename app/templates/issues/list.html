@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}Issue history{% endblock %}
+{% block content %}
+{{ m.page_header("Issue history", "Every bag dispatched against an approved request") }}
+<form class="card card-body mb-3 d-print-none" method="get">
+  <div class="row g-2 align-items-end">
+    <div class="col-6 col-md-3"><label class="form-label small" for="f-start">From (UTC date)</label>
+      <input class="form-control {% if range_error %}is-invalid{% endif %}" type="date" id="f-start" name="start" value="{{ start }}"></div>
+    <div class="col-6 col-md-3"><label class="form-label small" for="f-end">To (UTC date)</label>
+      <input class="form-control {% if range_error %}is-invalid{% endif %}" type="date" id="f-end" name="end" value="{{ end }}"></div>
+    <div class="col-6 col-md-2 d-grid"><button class="btn btn-outline-secondary" type="submit"><i class="bi bi-funnel"></i> Filter</button></div>
+    {% if start or end %}<div class="col-6 col-md-2 d-grid"><a class="btn btn-link" href="/issues">Clear</a></div>{% endif %}
+  </div>
+  <div class="form-text">Issue times are recorded and shown in UTC (IST = UTC + 5:30), and these dates filter on the UTC issue date.
+    Leave a date blank for no limit on that side. Both dates are inclusive.</div>
+</form>
+{% if range_error %}
+<div class="alert alert-warning" role="alert"><i class="bi bi-exclamation-triangle"></i> {{ range_error }} Showing all issue records instead.</div>
+{% endif %}
+{% include "partials/issues_table.html" %}
+{% endblock %}

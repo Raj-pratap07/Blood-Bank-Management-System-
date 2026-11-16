@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}New blood request{% endblock %}
+{% block content %}
+{{ m.page_header("New blood request", "Requests require approval by a medical officer before any bag is issued") }}
+<form method="post" novalidate>
+  {{ m.csrf() }}
+  {{ m.form_error(errors) }}
+  <div class="card mb-3"><div class="card-header">Patient</div><div class="card-body row g-3">
+    {{ m.field("patient_name", "Patient name", form, errors, required=true) }}
+    {{ m.field("patient_age", "Age", form, errors, type="number", required=true, col="col-6 col-md-2") }}
+    {{ m.select("patient_gender", "Gender", [("male","Male"),("female","Female"),("other","Other")], form, errors, required=true, col="col-6 col-md-2") }}
+    <div class="col-6 col-md-2">
+      <label class="form-label" for="f-blood_group">Blood group <span class="text-danger">*</span></label>
+      <select class="form-select {% if errors.get('blood_group') %}is-invalid{% endif %}" id="f-blood_group" name="blood_group" required>
+        <option value="">—</option>
+        {% for g in BLOOD_GROUPS %}<option {% if form.get('blood_group') == g %}selected{% endif %}>{{ g }}</option>{% endfor %}
+      </select>
+      {% if errors.get('blood_group') %}<div class="invalid-feedback">{{ errors['blood_group'] }}</div>{% endif %}
+    </div>
+    {{ m.field("units_required", "Units required", form, errors, type="number", required=true, col="col-6 col-md-2", attrs='min="1" max="20"') }}
+    {{ m.select("priority", "Priority", [("routine","Routine"),("urgent","Urgent"),("emergency","Emergency")], form, errors, required=true, blank=none, col="col-md-3") }}
+    {{ m.field("required_by", "Required by", form, errors, type="date", col="col-md-3") }}
+    {{ m.textarea("reason", "Clinical indication / diagnosis", form, errors, col="col-md-6") }}
+  </div></div>
+  <div class="card mb-3"><div class="card-header">Hospital &amp; requester</div><div class="card-body row g-3">
+    {{ m.field("hospital_name", "Hospital", form, errors, required=true) }}
+    {{ m.field("doctor_name", "Treating doctor", form, errors) }}
+    {{ m.field("requester_name", "Requester name", form, errors, required=true) }}
+    {{ m.field("requester_phone", "Requester phone", form, errors, required=true) }}
+    {{ m.textarea("hospital_address", "Hospital address", form, errors) }}
+  </div></div>
+  <button class="btn btn-bb" type="submit"><i class="bi bi-check-lg"></i> Register request</button>
+  <a class="btn btn-outline-secondary" href="/requests">Cancel</a>
+</form>
+{% endblock %}

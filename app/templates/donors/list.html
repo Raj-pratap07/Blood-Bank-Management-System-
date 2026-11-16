@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}Donors{% endblock %}
+{% block content %}
+{% call m.page_header("Donors", "Search, register and review donor eligibility") %}
+  <a class="btn btn-bb" href="/donors/new"><i class="bi bi-person-plus"></i> Register donor</a>
+{% endcall %}
+
+<form class="card card-body mb-3 d-print-none" method="get">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-4"><label class="form-label small">Search</label>
+      <input class="form-control" name="q" value="{{ q }}" placeholder="Name, phone, city or email"></div>
+    <div class="col-6 col-md-2"><label class="form-label small">Blood group</label>
+      <select class="form-select" name="group"><option value="">All</option>
+        {% for g in BLOOD_GROUPS %}<option {% if g == group %}selected{% endif %}>{{ g }}</option>{% endfor %}
+      </select></div>
+    <div class="col-6 col-md-2"><label class="form-label small">Eligibility</label>
+      <select class="form-select" name="eligible"><option value="">All</option>
+        <option value="yes" {% if eligible == 'yes' %}selected{% endif %}>Eligible now</option>
+        <option value="no" {% if eligible == 'no' %}selected{% endif %}>Not eligible</option>
+      </select></div>
+    <div class="col-md-2"><div class="form-check">
+      <input class="form-check-input" type="checkbox" name="inactive" value="true" id="inactive" {% if inactive %}checked{% endif %}>
+      <label class="form-check-label small" for="inactive">Include inactive</label></div></div>
+    <div class="col-md-2 d-grid"><button class="btn btn-outline-secondary"><i class="bi bi-search"></i> Filter</button></div>
+  </div>
+</form>
+
+{{ m.disclaimer(ELIGIBILITY_DISCLAIMER) }}
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr><th class="ps-3">Name</th><th>Group</th><th>Gender / Age</th><th>Phone</th><th>City</th><th>Last donation</th><th>Preliminary eligibility</th></tr></thead>
+      <tbody>
+      {% for d, e in rows %}
+        <tr class="{% if not d.is_active %}text-muted{% endif %}">
+          <td class="ps-3"><a href="/donors/{{ d.id }}">{{ d.full_name }}</a>{% if not d.is_active %} <span class="badge text-bg-secondary">inactive</span>{% endif %}</td>
+          <td>{{ m.group(d.blood_group) }}</td>
+          <td>{{ d.gender | label }} / {{ e.age }}</td>
+          <td>{{ d.phone }}</td>
+          <td>{{ d.city or '—' }}</td>
+          <td>{{ e.last_donation | d }}</td>
+          <td>{% if e.eligible %}<span class="badge text-bg-success">Eligible</span>
+              {% else %}<span class="badge text-bg-warning" title="{{ e.reasons | join(' ') }}">Not eligible</span>
+              {% if e.next_eligible_date %}<span class="small text-muted">from {{ e.next_eligible_date | d }}</span>{% endif %}{% endif %}</td>
+        </tr>
+      {% else %}{{ m.empty(7) }}{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-footer bg-white">{{ m.pagination(page) }}</div>
+</div>
+{% endblock %}

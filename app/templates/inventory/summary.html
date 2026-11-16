@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}Inventory{% endblock %}
+{% block content %}
+{% call m.page_header("Blood inventory", "Whole blood · individual bags tracked · FEFO issue order") %}
+  <a class="btn btn-outline-secondary" href="/inventory/units"><i class="bi bi-list-ul"></i> All bags</a>
+  <a class="btn btn-outline-danger" href="/inventory/units?near_expiry=true"><i class="bi bi-hourglass-split"></i> Near expiry</a>
+{% endcall %}
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 text-end">
+      <thead><tr>
+        <th class="text-start ps-3">Group</th><th>Available</th><th>Near expiry (≤{{ settings.near_expiry_days }}d)</th>
+        <th>Reserved</th><th>Quarantine</th><th>Issued</th><th>Expired</th><th class="pe-3">Discarded</th></tr></thead>
+      <tbody>
+      {% for r in stock %}
+        <tr>
+          <td class="text-start ps-3">{{ m.group(r.group) }}</td>
+          <td><a class="fw-semibold {% if r.available == 0 %}text-danger{% endif %}" href="/inventory/units?group={{ r.group | urlencode }}&status=available">{{ r.available }}</a></td>
+          <td>{% if r.near_expiry %}<span class="text-danger fw-semibold">{{ r.near_expiry }}</span>{% else %}0{% endif %}</td>
+          <td><a href="/inventory/units?group={{ r.group | urlencode }}&status=reserved">{{ r.reserved }}</a></td>
+          <td><a href="/inventory/units?group={{ r.group | urlencode }}&status=quarantine">{{ r.quarantine }}</a></td>
+          <td>{{ r.issued }}</td>
+          <td>{{ r.expired }}</td>
+          <td class="pe-3">{{ r.discarded }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+      <tfoot class="fw-semibold"><tr>
+        <td class="text-start ps-3">Total</td><td>{{ totals.available }}</td><td>{{ totals.near_expiry }}</td><td>{{ totals.reserved }}</td>
+        <td>{{ totals.quarantine }}</td><td>{{ totals.issued }}</td><td>{{ totals.expired }}</td><td class="pe-3">{{ totals.discarded }}</td></tr></tfoot>
+    </table>
+  </div>
+</div>
+<p class="small text-muted mt-2">Only <strong>available</strong>, unexpired bags can be reserved or issued. Quarantined bags become available only after screening is accepted. Expiry is checked automatically on every inventory, request and issue operation.</p>
+{% endblock %}

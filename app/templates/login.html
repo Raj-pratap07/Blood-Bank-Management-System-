@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<div class="login-wrap">
+  <div class="text-center mb-4">
+    <i class="bi bi-droplet-fill" style="font-size:3rem;color:var(--bb-red)"></i>
+    <h1 class="h4 mt-2">Blood Bank Management System</h1>
+    <p class="text-muted small">Authorised personnel only</p>
+  </div>
+  <div class="card">
+    <div class="card-body p-4">
+      {% if error %}<div class="alert alert-danger py-2">{{ error }}</div>{% endif %}
+      <form method="post" action="/login" autocomplete="off">
+        {{ m.csrf() }}
+        <input type="hidden" name="next" value="{{ next }}">
+        <div class="mb-3">
+          <label class="form-label" for="username">Username</label>
+          <input class="form-control" id="username" name="username" value="{{ username or '' }}" required autofocus>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="password">Password</label>
+          <input class="form-control" id="password" name="password" type="password" required>
+        </div>
+        <button class="btn btn-bb w-100" type="submit"><i class="bi bi-box-arrow-in-right"></i> Sign in</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

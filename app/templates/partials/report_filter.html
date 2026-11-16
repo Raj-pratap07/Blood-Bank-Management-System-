@@ -1,0 +1,15 @@
+{# Optional: `date_tz` (e.g. "UTC") labels the inputs; `date_basis` says which date the filter uses. #}
+<form class="card card-body mb-3 d-print-none" method="get">
+  <div class="row g-2 align-items-end">
+    <div class="col-6 col-md-3"><label class="form-label small" for="rf-start">From{% if date_tz %} ({{ date_tz }} date){% endif %}</label>
+      <input class="form-control" type="date" id="rf-start" name="start" value="{{ start }}"></div>
+    <div class="col-6 col-md-3"><label class="form-label small" for="rf-end">To{% if date_tz %} ({{ date_tz }} date){% endif %}</label>
+      <input class="form-control" type="date" id="rf-end" name="end" value="{{ end }}"></div>
+    <div class="col-6 col-md-2 d-grid"><button class="btn btn-outline-secondary"><i class="bi bi-funnel"></i> Apply</button></div>
+    <div class="col-6 col-md-2 d-grid"><button class="btn btn-outline-secondary" type="button" onclick="window.print()"><i class="bi bi-printer"></i> Print</button></div>
+  </div>
+  <div class="form-text">{% if date_basis %}Filters on {{ date_basis }}. {% endif %}Blank From = 90 days before To; blank To = today. Both dates are inclusive.</div>
+</form>
+{% if range_error %}
+<div class="alert alert-warning d-print-none" role="alert"><i class="bi bi-exclamation-triangle"></i> {{ range_error }} Showing the default last-90-days range instead.</div>
+{% endif %}

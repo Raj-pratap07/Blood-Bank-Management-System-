@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}{{ 'Edit donor' if donor else 'Register donor' }}{% endblock %}
+{% block content %}
+{{ m.page_header('Edit donor — ' ~ donor.full_name if donor else 'Register donor') }}
+<div class="card"><div class="card-body">
+  {{ m.form_error(errors) }}
+  <form method="post" novalidate>
+    {{ m.csrf() }}
+    <div class="row g-3">
+      {{ m.field("full_name", "Full name", form, errors, required=true) }}
+      {{ m.select("gender", "Gender", [("male","Male"),("female","Female"),("other","Other")], form, errors, required=true, col="col-md-3") }}
+      {{ m.field("date_of_birth", "Date of birth", form, errors, type="date", required=true, col="col-md-3") }}
+      <div class="col-md-3">
+        <label class="form-label" for="f-blood_group">Blood group <span class="text-danger">*</span></label>
+        <select class="form-select {% if errors.get('blood_group') %}is-invalid{% endif %}" id="f-blood_group" name="blood_group" required>
+          <option value="">— Select —</option>
+          {% for g in BLOOD_GROUPS %}<option {% if form.get('blood_group') == g %}selected{% endif %}>{{ g }}</option>{% endfor %}
+        </select>
+        {% if errors.get('blood_group') %}<div class="invalid-feedback">{{ errors['blood_group'] }}</div>{% endif %}
+      </div>
+      {{ m.field("weight_kg", "Weight (kg)", form, errors, type="number", required=true, col="col-md-3", attrs='step="0.1" min="20" max="250"') }}
+      {{ m.field("phone", "Phone", form, errors, required=true, col="col-md-3") }}
+      {{ m.field("email", "Email", form, errors, type="email", col="col-md-3") }}
+      {{ m.field("city", "City", form, errors, col="col-md-4") }}
+      {{ m.field("last_external_donation_date", "Last donation at another centre", form, errors, type="date", col="col-md-4",
+                 help="Leave blank if never donated elsewhere. Used for interval and first-time donor checks.") }}
+      {{ m.textarea("address", "Address", form, errors) }}
+    </div>
+    <div class="mt-4 d-flex gap-2">
+      <button class="btn btn-bb" type="submit"><i class="bi bi-check-lg"></i> Save</button>
+      <a class="btn btn-outline-secondary" href="{{ '/donors/' ~ donor.id if donor else '/donors' }}">Cancel</a>
+    </div>
+  </form>
+</div></div>
+{% endblock %}

@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}{{ donation.code }}{% endblock %}
+{% block content %}
+{% call m.page_header("Donation " ~ donation.code, donation.donation_date | d) %}
+  {{ m.badge(donation.status) }}
+{% endcall %}
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card mb-3">
+      <div class="card-header">Collection</div>
+      <div class="card-body"><dl class="row mb-0">
+        <dt class="col-5">Donor</dt><dd class="col-7"><a href="/donors/{{ donation.donor_id }}">{{ donation.donor.full_name }}</a></dd>
+        <dt class="col-5">Blood group</dt><dd class="col-7">{{ m.group(donation.blood_group) }}</dd>
+        <dt class="col-5">Product</dt><dd class="col-7">{{ donation.product | label }}, {{ donation.volume_ml }} ml, {{ donation.units_collected }} bag</dd>
+        <dt class="col-5">Recorded by</dt><dd class="col-7">{{ donation.recorded_by.full_name }}</dd>
+        <dt class="col-5">Cleared by</dt><dd class="col-7">{{ donation.cleared_by.full_name }} ({{ donation.cleared_by.role.label }})</dd>
+      </dl></div>
+    </div>
+    <div class="card mb-3">
+      <div class="card-header">Pre-donation screening</div>
+      <div class="card-body"><dl class="row mb-0">
+        <dt class="col-5">Weight</dt><dd class="col-7">{{ donation.weight_kg }} kg</dd>
+        <dt class="col-5">Haemoglobin</dt><dd class="col-7">{{ donation.hemoglobin_g_dl }} g/dL</dd>
+        <dt class="col-5">Blood pressure</dt><dd class="col-7">{{ donation.bp_systolic }}/{{ donation.bp_diastolic }} mmHg</dd>
+        <dt class="col-5">Pulse</dt><dd class="col-7">{{ donation.pulse_bpm }} bpm</dd>
+        <dt class="col-5">Temperature</dt><dd class="col-7">{{ donation.temperature_c }} °C</dd>
+        <dt class="col-5">Questionnaire</dt><dd class="col-7">{{ 'Satisfactory' if donation.questionnaire_ok else 'Not satisfactory' }}</dd>
+        <dt class="col-5">Notes</dt><dd class="col-7">{{ donation.pre_donation_notes or '—' }}</dd>
+      </dl></div>
+    </div>
+    <div class="card">
+      <div class="card-header">Blood bag</div>
+      <div class="card-body p-0"><table class="table table-sm mb-0">
+        <thead><tr><th class="ps-3">Bag ID</th><th>Collected</th><th>Expires</th><th class="pe-3">Status</th></tr></thead>
+        <tbody>{% for u in donation.units %}
+          <tr><td class="ps-3 font-monospace"><a href="/inventory/units/{{ u.id }}">{{ u.unit_code }}</a></td>
+              <td>{{ u.collected_on | d }}</td><td>{{ u.expires_on | d }}</td><td class="pe-3">{{ m.badge(u.status) }}</td></tr>
+        {% endfor %}</tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">Laboratory screening (TTI &amp; grouping)</div>
+      <div class="card-body">
+      {% if donation.status.value != 'quarantine' %}
+        <table class="table table-sm">
+          {% for field, label in markers %}
+          <tr><th>{{ label }}</th><td>{{ m.badge(donation[field]) if donation[field] else '—' }}</td></tr>
+          {% endfor %}
+          <tr><th>ABO/Rh confirmed</th><td>{{ 'Yes' if donation.abo_rh_confirmed else 'No' }}</td></tr>
+          <tr><th>Decision</th><td>{{ m.badge(donation.status) }}</td></tr>
+          <tr><th>Screened by</th><td>{{ donation.screened_by.full_name if donation.screened_by else '—' }} · {{ donation.screened_at.strftime('%d %b %Y %H:%M') if donation.screened_at else '' }} UTC</td></tr>
+          <tr><th>Notes</th><td>{{ donation.screening_notes or '—' }}</td></tr>
+        </table>
+      {% elif user.can_authorize %}
+        {{ m.form_error(errors) }}
+        <form method="post" action="/donations/{{ donation.id }}/screening">
+          {{ m.csrf() }}
+          <div class="row g-2">
+          {% for field, label in markers %}
+            {{ m.select(field, label, [("non_reactive","Non-reactive"),("reactive","Reactive")], form, errors, required=true) }}
+          {% endfor %}
+          </div>
+          <div class="mt-3">{{ m.checkbox("abo_rh_confirmed", "ABO/Rh grouping confirmed by the laboratory as " ~ donation.blood_group.value, form, errors) }}</div>
+          <div class="mt-2">{{ m.textarea("screening_notes", "Screening notes (required when rejecting)", form, errors) }}</div>
+          <div class="mt-3 d-flex gap-2">
+            <button class="btn btn-success" name="decision" value="accept" type="submit"><i class="bi bi-check2-circle"></i> Accept &amp; release to stock</button>
+            <button class="btn btn-outline-danger" name="decision" value="reject" type="submit"><i class="bi bi-x-circle"></i> Reject &amp; discard</button>
+          </div>
+          <div class="small text-muted mt-2">Accept is only possible when all markers are non-reactive and grouping is confirmed.</div>
+        </form>
+      {% else %}
+        <div class="alert alert-warning mb-0"><i class="bi bi-shield-lock"></i> Awaiting laboratory screening. Only a medical officer or administrator can record screening results.</div>
+      {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

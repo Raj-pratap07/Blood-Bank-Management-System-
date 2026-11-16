@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}{{ req.code }}{% endblock %}
+{% block content %}
+{% set open = req.status.value in ('pending', 'approved', 'partially_issued') %}
+{% call m.page_header("Request " ~ req.code, "Registered " ~ (req.created_at | d) ~ " by " ~ req.created_by.full_name) %}
+  {{ m.badge(req.priority) }} {{ m.badge(req.status) }}
+{% endcall %}
+
+{{ m.form_error(errors) }}
+
+<div class="row g-3">
+  <div class="col-lg-5">
+    <div class="card mb-3"><div class="card-header">Patient &amp; hospital</div><div class="card-body"><dl class="row mb-0">
+      <dt class="col-5">Patient</dt><dd class="col-7">{{ req.patient_name }} ({{ req.patient_age }}, {{ req.patient_gender | label }})</dd>
+      <dt class="col-5">Blood group</dt><dd class="col-7">{{ m.group(req.blood_group) }}</dd>
+      <dt class="col-5">Units</dt><dd class="col-7">{{ req.units_required }} required · {{ req.units_reserved }} reserved · {{ req.units_issued }} issued</dd>
+      <dt class="col-5">Required by</dt><dd class="col-7">{{ req.required_by | d }}</dd>
+      <dt class="col-5">Indication</dt><dd class="col-7">{{ req.reason or '—' }}</dd>
+      <dt class="col-5">Hospital</dt><dd class="col-7">{{ req.hospital_name }}{% if req.hospital_address %}<br><span class="small text-muted">{{ req.hospital_address }}</span>{% endif %}</dd>
+      <dt class="col-5">Doctor</dt><dd class="col-7">{{ req.doctor_name or '—' }}</dd>
+      <dt class="col-5">Requester</dt><dd class="col-7">{{ req.requester_name }} · {{ req.requester_phone }}</dd>
+      {% if req.approved_by %}
+      <dt class="col-5">Approved by</dt>
+      <dd class="col-7">{{ req.approved_by.full_name }} · {{ req.approved_at.strftime('%d %b %Y %H:%M') }} UTC</dd>
+      {% endif %}
+      {% if req.rejected_by %}
+      <dt class="col-5">Rejected by</dt>
+      <dd class="col-7">{{ req.rejected_by.full_name }} · {{ req.rejected_at.strftime('%d %b %Y %H:%M') }} UTC</dd>
+      {% endif %}
+      {% if req.decision_note %}<dt class="col-5">Note</dt><dd class="col-7">{{ req.decision_note }}</dd>{% endif %}
+    </dl></div></div>
+
+    <div class="card">
+      <div class="card-header">Compatible stock (preliminary)</div>
+      <div class="card-body">
+        <div class="d-flex flex-wrap gap-2 mb-2">
+        {% for g, n, identical in compatible %}
+          <div class="border rounded px-2 py-1 {% if identical %}border-primary{% endif %}">{{ m.group(g) }} <strong>{{ n }}</strong></div>
+        {% endfor %}
+        </div>
+        <div class="small text-muted mb-1">Total available compatible bags: <strong>{{ compatible_total }}</strong>. Identical group is reserved first, then FEFO.</div>
+        <div class="small text-muted"><i class="bi bi-info-circle"></i> {{ COMPAT_DISCLAIMER }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    {% if open %}
+    <div class="card mb-3"><div class="card-header">Authorisation</div><div class="card-body">
+      {% if user.can_authorize %}
+        {% if req.units_outstanding > 0 %}
+        <form method="post" action="/requests/{{ req.id }}/approve" class="mb-3">
+          {{ m.csrf() }}
+          <label class="form-label small" for="note">Approval note (optional)</label>
+          <div class="input-group">
+            <input class="form-control" id="note" name="note" placeholder="e.g. Approved for transfusion pending crossmatch">
+            <button class="btn btn-success" type="submit"><i class="bi bi-shield-check"></i>
+              {{ 'Approve & reserve' if req.status.value == 'pending' else 'Reserve more' }} ({{ req.units_outstanding }})</button>
+          </div>
+        </form>
+        {% endif %}
+        {% if req.units_issued == 0 %}
+        <form method="post" action="/requests/{{ req.id }}/reject" data-confirm="Reject this request and release reserved bags?">
+          {{ m.csrf() }}
+          <div class="input-group">
+            <input class="form-control" name="reason" placeholder="Rejection reason (required)" required minlength="3">
+            <button class="btn btn-outline-danger" type="submit">Reject</button>
+          </div>
+        </form>
+        {% else %}
+        <div class="small text-muted">Bags have already been issued, so this request can no longer be rejected. Use <em>Cancel request</em> below to close the remaining units.</div>
+        {% endif %}
+      {% elif req.status.value == 'pending' %}
+        <div class="alert alert-warning mb-0"><i class="bi bi-shield-lock"></i> Awaiting approval by a medical officer. Bags cannot be issued until the request is approved.</div>
+      {% else %}
+        <div class="text-muted small">Approved by {{ req.approved_by.full_name }}.{% if req.units_outstanding %} {{ req.units_outstanding }} unit(s) still need reserving by a medical officer.{% endif %}</div>
+      {% endif %}
+    </div></div>
+    {% endif %}
+
+    <div class="card mb-3">
+      <div class="card-header">Reserved bags</div>
+      {% set reserved = req.reserved_units | selectattr('status.value', 'equalto', 'reserved') | list %}
+      {% if reserved %}
+      <form method="post" action="/requests/{{ req.id }}/issue">
+        {{ m.csrf() }}
+        <div class="table-responsive"><table class="table table-sm mb-0">
+          <thead><tr><th class="ps-3"><input type="checkbox" class="form-check-input" checked onclick="document.querySelectorAll('.unit-cb').forEach(c => c.checked = this.checked)" aria-label="Select all"></th>
+            <th>Bag ID</th><th>Group</th><th>Expires</th><th class="pe-3">Days left</th></tr></thead>
+          <tbody>
+          {% for u in reserved %}
+            <tr><td class="ps-3"><input class="form-check-input unit-cb" type="checkbox" name="unit_ids[]" value="{{ u.id }}" checked aria-label="Select {{ u.unit_code }}"></td>
+                <td class="font-monospace"><a href="/inventory/units/{{ u.id }}">{{ u.unit_code }}</a></td>
+                <td>{{ m.group(u.blood_group) }}{% if u.blood_group != req.blood_group %} <span class="small text-muted">compatible</span>{% endif %}</td>
+                <td>{{ u.expires_on | d }}</td><td class="pe-3">{{ u.days_to_expiry() }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table></div>
+        <div class="card-body border-top row g-2">
+          {% if errors.get('unit_ids') %}<div class="col-12 text-danger small">Select at least one bag.</div>{% endif %}
+          {{ m.field("received_by", "Received by (name)", form, errors, required=true) }}
+          {{ m.field("notes", "Issue notes", form, errors) }}
+          {{ m.checkbox("crossmatch_confirmed", "I confirm the laboratory crossmatch for the selected bags is compatible and the request has been authorised for issue.", form, errors) }}
+          <div class="col-12"><button class="btn btn-bb" type="submit"><i class="bi bi-box-arrow-up-right"></i> Issue selected bags</button></div>
+        </div>
+      </form>
+      {% else %}
+      <div class="card-body text-muted small">No bags currently reserved.</div>
+      {% endif %}
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header">Issue history</div>
+      <div class="table-responsive"><table class="table table-sm mb-0">
+        <thead><tr><th class="ps-3">Issued at (UTC)</th><th>Bag ID</th><th>Group</th><th>Issued by</th><th class="pe-3">Received by</th></tr></thead>
+        <tbody>
+        {% for i in req.issues %}
+          <tr><td class="ps-3">{{ i.issued_at.strftime('%d %b %Y %H:%M') }}</td><td class="font-monospace">{{ i.blood_unit.unit_code }}</td>
+              <td>{{ m.group(i.blood_unit.blood_group) }}</td><td>{{ i.issued_by.full_name }}</td><td class="pe-3">{{ i.received_by }}</td></tr>
+        {% else %}{{ m.empty(5, "Nothing issued yet.") }}{% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+
+    {% if open %}
+    <form method="post" action="/requests/{{ req.id }}/cancel" data-confirm="Cancel this request and release reserved bags?" class="d-flex gap-2">
+      {{ m.csrf() }}
+      <input class="form-control" name="reason" placeholder="Cancellation reason (optional)">
+      <button class="btn btn-outline-secondary text-nowrap" type="submit">Cancel request</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

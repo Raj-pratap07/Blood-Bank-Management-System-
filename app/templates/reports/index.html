@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+{{ m.page_header("Reports", "Printable, date-filtered reports (default: last 90 days)") }}
+<div class="row g-3">
+  {% for href, icon, title, text in [
+    ("/reports/donations", "droplet-half", "Donation report", "Collections, screening outcomes and volume by period."),
+    ("/reports/inventory", "box-seam", "Inventory report", "Current stock by group and status, with every bag in stock in FEFO order."),
+    ("/reports/requests", "clipboard2-pulse", "Blood request report", "Requests by status and priority, units required vs. issued."),
+    ("/reports/issues", "truck", "Issuing history", "Every bag issued, to which request and hospital, by whom."),
+  ] %}
+  <div class="col-md-6 col-xl-3">
+    <a class="card h-100 text-decoration-none text-reset" href="{{ href }}"><div class="card-body">
+      <i class="bi bi-{{ icon }} fs-3" style="color:var(--bb-red)"></i>
+      <h2 class="h5 mt-2">{{ title }}</h2><p class="text-muted small mb-0">{{ text }}</p>
+    </div></a>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

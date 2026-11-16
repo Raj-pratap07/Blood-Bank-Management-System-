@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}Donation report{% endblock %}
+{% block content %}
+{{ m.page_header("Donation report", (start | d) ~ " – " ~ (end | d)) }}
+{% set date_basis = "the donation (collection) date" %}
+{% include "partials/report_filter.html" %}
+<div class="row g-3 mb-3">
+  {% for label, value in [("Donations", rows | length), ("Accepted", totals.accepted), ("Quarantine", totals.quarantine),
+                          ("Rejected", totals.rejected), ("Volume collected", (totals.volume_ml / 1000) | round(2) ~ " L")] %}
+  <div class="col-6 col-md"><div class="card stat-card"><div class="card-body">
+    <div class="stat-value">{{ value }}</div><div class="stat-label">{{ label }}</div></div></div></div>
+  {% endfor %}
+</div>
+<div class="card"><div class="table-responsive">
+  <table class="table table-sm table-hover mb-0">
+    <thead><tr><th class="ps-3">Date</th><th>Donation</th><th>Donor</th><th>Group</th><th>Volume</th><th>Hb</th><th>Bag</th><th>Screening</th><th class="pe-3">Status</th></tr></thead>
+    <tbody>
+    {% for d in rows %}
+      <tr><td class="ps-3">{{ d.donation_date | d }}</td><td><a href="/donations/{{ d.id }}">{{ d.code }}</a></td>
+          <td>{{ d.donor.full_name }}</td><td>{{ m.group(d.blood_group) }}</td><td>{{ d.volume_ml }} ml</td>
+          <td>{{ d.hemoglobin_g_dl }}</td><td class="font-monospace small">{% for u in d.units %}{{ u.unit_code }}{% endfor %}</td>
+          <td>{{ d.screening_summary }}</td><td class="pe-3">{{ m.badge(d.status) }}</td></tr>
+    {% else %}{{ m.empty(9) }}{% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% endblock %}

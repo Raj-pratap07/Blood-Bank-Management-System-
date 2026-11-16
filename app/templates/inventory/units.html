@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}Blood bags{% endblock %}
+{% block content %}
+{{ m.page_header("Blood bags", "Sorted First-Expiry-First-Out") }}
+
+<form class="card card-body mb-3 d-print-none" method="get">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-3"><label class="form-label small">Bag ID</label><input class="form-control" name="q" value="{{ q }}" placeholder="e.g. WB261101"></div>
+    <div class="col-6 col-md-2"><label class="form-label small">Group</label>
+      <select class="form-select" name="group"><option value="">All</option>
+        {% for g in BLOOD_GROUPS %}<option {% if g == group %}selected{% endif %}>{{ g }}</option>{% endfor %}</select></div>
+    <div class="col-6 col-md-2"><label class="form-label small">Status</label>
+      <select class="form-select" name="status"><option value="">All</option>
+        {% for s in statuses %}<option value="{{ s }}" {% if s == status %}selected{% endif %}>{{ s | label }}</option>{% endfor %}</select></div>
+    <div class="col-md-2"><div class="form-check">
+      <input class="form-check-input" type="checkbox" id="ne" name="near_expiry" value="true" {% if near_expiry %}checked{% endif %}>
+      <label class="form-check-label small" for="ne">Near expiry only</label></div></div>
+    <div class="col-md-2 d-grid"><button class="btn btn-outline-secondary"><i class="bi bi-funnel"></i> Filter</button></div>
+  </div>
+</form>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr><th class="ps-3">Bag ID</th><th>Group</th><th>Product</th><th>Collected</th><th>Expires</th><th>Days left</th><th>Status</th><th class="pe-3">Reserved for</th></tr></thead>
+      <tbody>
+      {% for u in page.items %}
+        {% set left = u.days_to_expiry() %}
+        <tr>
+          <td class="ps-3 font-monospace"><a href="/inventory/units/{{ u.id }}">{{ u.unit_code }}</a></td>
+          <td>{{ m.group(u.blood_group) }}</td>
+          <td>{{ u.product | label }} {{ u.volume_ml }} ml</td>
+          <td>{{ u.collected_on | d }}</td>
+          <td>{{ u.expires_on | d }}</td>
+          <td>{% if u.status.value in ('available','reserved','quarantine') %}
+                <span class="{% if left <= settings.near_expiry_days %}text-danger fw-semibold{% endif %}">{{ left }}</span>
+              {% else %}—{% endif %}</td>
+          <td>{{ m.badge(u.status) }}</td>
+          <td class="pe-3">{% if u.reserved_for %}<a href="/requests/{{ u.reserved_for.id }}">{{ u.reserved_for.code }}</a>{% else %}—{% endif %}</td>
+        </tr>
+      {% else %}{{ m.empty(8) }}{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-footer bg-white">{{ m.pagination(page) }}</div>
+</div>
+{% endblock %}

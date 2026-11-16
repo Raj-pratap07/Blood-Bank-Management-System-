@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+{% call m.page_header("Dashboard", "Stock as of " ~ (today() | d)) %}
+  <a class="btn btn-bb" href="/donations/new"><i class="bi bi-plus-lg"></i> Record donation</a>
+  <a class="btn btn-outline-secondary" href="/requests/new"><i class="bi bi-plus-lg"></i> New request</a>
+{% endcall %}
+
+{% if expired_now %}
+<div class="alert alert-warning"><i class="bi bi-hourglass-bottom"></i> {{ expired_now }} bag(s) passed their expiry date and were moved to <strong>expired</strong>.</div>
+{% endif %}
+
+<div class="row g-3 mb-4">
+  {% for label, value, icon, href, tone in [
+      ("Registered donors", counts.donors, "people", "/donors", ""),
+      ("Available units", counts.available, "droplet", "/inventory/units?status=available", "text-success"),
+      ("Reserved units", counts.reserved, "lock", "/inventory/units?status=reserved", ""),
+      ("Pending requests", counts.pending_requests, "clipboard2-pulse", "/requests?status=pending", "text-warning-emphasis"),
+      ("Awaiting screening", counts.pending_screening, "shield-exclamation", "/donations?status=quarantine", ""),
+      ("Near expiry (≤ " ~ settings.near_expiry_days ~ " days)", counts.near_expiry, "hourglass-split", "/inventory/units?near_expiry=true", "text-danger"),
+  ] %}
+  <div class="col-6 col-md-4 col-xl-2">
+    <a class="text-decoration-none text-reset" href="{{ href }}">
+      <div class="card stat-card h-100"><div class="card-body d-flex justify-content-between">
+        <div><div class="stat-value {{ tone }}">{{ value }}</div><div class="stat-label">{{ label }}</div></div>
+        <i class="bi bi-{{ icon }}"></i>
+      </div></div>
+    </a>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header">Inventory by blood group <span class="text-muted fw-normal small">(units)</span></div>
+      <div class="card-body"><div class="chart-box"><canvas id="inventoryChart" aria-label="Inventory by blood group" role="img"></canvas></div></div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header">Blood group-wise stock</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr><th class="ps-3">Group</th><th class="text-end">Available</th><th class="text-end">Reserved</th><th class="text-end">Quarantine</th><th class="text-end pe-3">Near expiry</th></tr></thead>
+          <tbody>
+          {% for r in stock %}
+            <tr>
+              <td class="ps-3">{{ m.group(r.group) }}</td>
+              <td class="text-end fw-semibold {% if r.available == 0 %}text-danger{% endif %}">{{ r.available }}</td>
+              <td class="text-end">{{ r.reserved }}</td>
+              <td class="text-end">{{ r.quarantine }}</td>
+              <td class="text-end pe-3">{% if r.near_expiry %}<span class="text-danger fw-semibold">{{ r.near_expiry }}</span>{% else %}0{% endif %}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header">Donations per month</div>
+      <div class="card-body"><div class="chart-box"><canvas id="donationChart" aria-label="Donations per month" role="img"></canvas></div></div>
+    </div>
+  </div>
+  <div class="col-lg-3">
+    <div class="card h-100">
+      <div class="card-header">Requests by status</div>
+      <div class="card-body"><div class="chart-box"><canvas id="requestChart" aria-label="Requests by status" role="img"></canvas></div></div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between">Recent donations <a class="small" href="/donations">View all</a></div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr><th class="ps-3">Date</th><th>Donor</th><th>Group</th><th class="pe-3">Status</th></tr></thead>
+          <tbody>
+          {% for d in recent %}
+            <tr>
+              <td class="ps-3">{{ d.donation_date | d }}</td>
+              <td><a href="/donations/{{ d.id }}">{{ d.donor.full_name }}</a></td>
+              <td>{{ m.group(d.blood_group) }}</td>
+              <td class="pe-3">{{ m.badge(d.status) }}</td>
+            </tr>
+          {% else %}{{ m.empty(4) }}{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', path='js/charts.js') }}"></script>
+{% endblock %}

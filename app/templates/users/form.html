@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}New account{% endblock %}
+{% block content %}
+{{ m.page_header("New user account") }}
+<div class="card" style="max-width:720px"><div class="card-body">
+  {{ m.form_error(errors) }}
+  <form method="post" novalidate autocomplete="off">
+    {{ m.csrf() }}
+    <div class="row g-3">
+      {{ m.field("username", "Username", form, errors, required=true, help="3-50 characters: lowercase letters, digits, dot or underscore.") }}
+      {{ m.field("full_name", "Full name", form, errors, required=true) }}
+      {{ m.select("role", "Role", role_options, form, errors, required=true, blank=none) }}
+      {{ m.field("password", "Initial password", form, errors, type="password", required=true, help="8-72 characters.") }}
+    </div>
+    <div class="small text-muted mt-3">
+      <strong>Staff</strong>: donors, donations, requests, issuing approved requests ·
+      <strong>Medical Officer</strong>: also donor clearance, screening acceptance, request approval, discards ·
+      <strong>Administrator</strong>: everything, including account management.
+    </div>
+    <div class="mt-4 d-flex gap-2">
+      <button class="btn btn-bb" type="submit">Create account</button>
+      <a class="btn btn-outline-secondary" href="/users">Cancel</a>
+    </div>
+  </form>
+</div></div>
+{% endblock %}

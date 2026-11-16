@@ -1,0 +1,42 @@
+:root {
+  --bb-red: #b3202a;
+  --bb-red-dark: #8c1820;
+  --bb-surface: #f6f6f4;
+  --viz-surface: #fcfcfb;
+}
+
+body { background: var(--bb-surface); }
+
+.bb-navbar { background: var(--bb-red); }
+.bb-navbar .nav-link.active { font-weight: 600; border-bottom: 2px solid #fff; }
+
+.btn-bb { background: var(--bb-red); border-color: var(--bb-red); color: #fff; }
+.btn-bb:hover, .btn-bb:focus { background: var(--bb-red-dark); border-color: var(--bb-red-dark); color: #fff; }
+
+.card { border: 1px solid #e3e2de; box-shadow: none; }
+.card-header { background: #fff; font-weight: 600; }
+
+.stat-card .stat-value { font-size: 1.9rem; font-weight: 700; line-height: 1.1; }
+.stat-card .stat-label { color: #52514e; font-size: .85rem; }
+.stat-card i { font-size: 1.6rem; opacity: .55; }
+
+.bb-group {
+  display: inline-block; min-width: 2.6rem; text-align: center; font-weight: 700;
+  border: 1.5px solid var(--bb-red); color: var(--bb-red); border-radius: .4rem;
+  padding: .05rem .35rem; font-size: .85rem; background: #fff;
+}
+.bb-badge { font-weight: 500; }
+
+.table > :not(caption) > * > * { vertical-align: middle; }
+.table thead th { font-size: .8rem; text-transform: uppercase; letter-spacing: .02em; color: #52514e; }
+
+.login-wrap { max-width: 420px; margin: 8vh auto 0; }
+
+.chart-box { position: relative; height: 280px; }
+
+@media print {
+  body { background: #fff; }
+  .card { border: none; }
+  main { padding: 0 !important; }
+  a { text-decoration: none; color: inherit; }
+}

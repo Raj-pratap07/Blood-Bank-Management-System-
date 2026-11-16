@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}Inventory report{% endblock %}
+{% block content %}
+{% call m.page_header("Inventory report", "Generated " ~ (today() | d)) %}
+  <button class="btn btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
+{% endcall %}
+<div class="card mb-3"><div class="table-responsive">
+  <table class="table table-sm mb-0 text-end">
+    <thead><tr><th class="text-start ps-3">Group</th><th>Available</th><th>Near expiry</th><th>Reserved</th><th>Quarantine</th><th>Issued</th><th>Expired</th><th class="pe-3">Discarded</th></tr></thead>
+    <tbody>{% for r in stock %}
+      <tr><td class="text-start ps-3">{{ m.group(r.group) }}</td><td class="fw-semibold">{{ r.available }}</td><td>{{ r.near_expiry }}</td><td>{{ r.reserved }}</td>
+          <td>{{ r.quarantine }}</td><td>{{ r.issued }}</td><td>{{ r.expired }}</td><td class="pe-3">{{ r.discarded }}</td></tr>
+    {% endfor %}</tbody>
+    <tfoot class="fw-semibold"><tr><td class="text-start ps-3">Total</td><td>{{ totals.available }}</td><td>{{ totals.near_expiry }}</td><td>{{ totals.reserved }}</td>
+      <td>{{ totals.quarantine }}</td><td>{{ totals.issued }}</td><td>{{ totals.expired }}</td><td class="pe-3">{{ totals.discarded }}</td></tr></tfoot>
+  </table>
+</div></div>
+<h2 class="h5">Bags in stock (FEFO order)</h2>
+<div class="card"><div class="table-responsive">
+  <table class="table table-sm table-hover mb-0">
+    <thead><tr><th class="ps-3">Bag ID</th><th>Group</th><th>Collected</th><th>Expires</th><th>Days left</th><th>Status</th><th class="pe-3">Reserved for</th></tr></thead>
+    <tbody>{% for u in units %}
+      <tr><td class="ps-3 font-monospace">{{ u.unit_code }}</td><td>{{ m.group(u.blood_group) }}</td><td>{{ u.collected_on | d }}</td>
+          <td>{{ u.expires_on | d }}</td><td class="{% if u.days_to_expiry() <= settings.near_expiry_days %}text-danger fw-semibold{% endif %}">{{ u.days_to_expiry() }}</td>
+          <td>{{ m.badge(u.status) }}</td><td class="pe-3">{{ u.reserved_for.code if u.reserved_for else '—' }}</td></tr>
+    {% else %}{{ m.empty(7) }}{% endfor %}</tbody>
+  </table>
+</div></div>
+{% endblock %}

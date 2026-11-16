@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}Bag {{ unit.unit_code }}{% endblock %}
+{% block content %}
+{% call m.page_header("Bag " ~ unit.unit_code) %}{{ m.badge(unit.status) }}{% endcall %}
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card"><div class="card-body"><dl class="row mb-0">
+      <dt class="col-5">Bag ID</dt><dd class="col-7 font-monospace">{{ unit.unit_code }}</dd>
+      <dt class="col-5">Product</dt><dd class="col-7">{{ unit.product | label }} ({{ unit.volume_ml }} ml)</dd>
+      <dt class="col-5">Blood group</dt><dd class="col-7">{{ m.group(unit.blood_group) }}</dd>
+      <dt class="col-5">Collected</dt><dd class="col-7">{{ unit.collected_on | d }}</dd>
+      <dt class="col-5">Expires</dt><dd class="col-7">{{ unit.expires_on | d }}
+        {% if unit.is_expired() %}<span class="badge text-bg-danger">past expiry</span>{% else %}({{ unit.days_to_expiry() }} days left){% endif %}</dd>
+      <dt class="col-5">Status</dt><dd class="col-7">{{ m.badge(unit.status) }}</dd>
+      <dt class="col-5">Note</dt><dd class="col-7">{{ unit.status_note or '—' }}</dd>
+      <dt class="col-5">Donation</dt><dd class="col-7"><a href="/donations/{{ unit.donation_id }}">{{ unit.donation.code }}</a> · <a href="/donors/{{ unit.donation.donor_id }}">{{ unit.donation.donor.full_name }}</a></dd>
+      {% if unit.reserved_for %}<dt class="col-5">Reserved for</dt><dd class="col-7"><a href="/requests/{{ unit.reserved_for.id }}">{{ unit.reserved_for.code }}</a></dd>{% endif %}
+      {% if unit.issue %}<dt class="col-5">Issued</dt><dd class="col-7">{{ unit.issue.issued_at.strftime('%d %b %Y %H:%M') }} UTC to <a href="/requests/{{ unit.issue.request_id }}">{{ unit.issue.request.code }}</a> ({{ unit.issue.request.hospital_name }})</dd>{% endif %}
+    </dl></div></div>
+  </div>
+  {% if user.can_authorize and unit.status.value == 'quarantine' %}
+  <div class="col-lg-6">
+    <div class="alert alert-secondary"><i class="bi bi-info-circle"></i> This bag is in quarantine. To discard it, reject the
+      <a href="/donations/{{ unit.donation_id }}">donation screening</a> with a reason.</div>
+  </div>
+  {% endif %}
+  {% if user.can_authorize and unit.status.value in ('available','expired') %}
+  <div class="col-lg-6">
+    <div class="card border-danger-subtle"><div class="card-header">Discard bag</div><div class="card-body">
+      <form method="post" action="/inventory/units/{{ unit.id }}/discard" data-confirm="Discard this bag permanently?">
+        {{ m.csrf() }}
+        <label class="form-label" for="reason">Reason</label>
+        <input class="form-control mb-2" id="reason" name="reason" required minlength="3" placeholder="e.g. Bag leakage, haemolysis, expired">
+        <button class="btn btn-outline-danger" type="submit"><i class="bi bi-trash"></i> Discard</button>
+      </form>
+    </div></div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
