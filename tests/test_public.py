@@ -14,9 +14,10 @@ from app.config import settings
 from app.schemas.facilities import ContactIn, FacilityIn, LocationIn, SourceIn, VerificationIn
 from app.services import facilities as fsvc
 from app.services import public as pub
+from app.utils import business_today
 from tests.conftest import login
 
-TODAY = date.today()
+TODAY = business_today()
 
 
 def _src(db, f, actor, stype="government_document", title="Test official list", ref="Test ref"):
@@ -75,10 +76,16 @@ def test_location_form_prefills_saved_coordinates(client, world):
 
 
 def test_branding(client):
-    assert "Haldwani BloodLink" in client.get("/login").text
+    assert settings.app_name == "Blood Bank Management System"
+    assert settings.app_subtitle == "Haldwani Blood Bank Directory and Management Platform"
+    page = client.get("/login").text
+    assert "Blood Bank Management System" in page and settings.app_subtitle in page
+    for url in ("/", "/find", "/find/about-data"):
+        html = client.get(url).text
+        assert "BloodLink" not in html and "Blood Bank Management System" in html and settings.app_subtitle in html
     login(client, "staff")
-    assert "Haldwani BloodLink</a>" in client.get("/donors").text
-    assert settings.app_name == "Haldwani BloodLink"
+    staff = client.get("/donors").text
+    assert "Blood Bank Management System</a>" in staff and "BloodLink" not in staff
 
 
 # ================================================================ public access
@@ -112,8 +119,15 @@ class TestVisibility:
     def test_only_listed_facilities_are_public(self, client, world):
         html = client.get("/find").text
         assert "Test Facility Alpha" in html and "Test Facility Beta" in html
-        assert "Test Facility Gamma" not in html and "Demo Blood Centre" not in html
-        assert client.get(f"/find/{world['c'].slug}").status_code == 404
+        assert "Demo Blood Centre" not in html
+        # Gamma (identity confirmed, NOT listed) appears only under "Under verification": name and sources,
+        # never its unverified phone, and never in the map data.
+        listed_part, _, candidate_part = html.partition('id="under-verification"')
+        assert "Test Facility Gamma" not in listed_part and "Test Facility Gamma" in candidate_part
+        assert "9800000103" not in html
+        assert world["c"].slug not in {d["slug"] for d in _map_data(html)}
+        page = client.get(f"/find/{world['c'].slug}")
+        assert page.status_code == 200 and "Under verification" in page.text and "9800000103" not in page.text
         assert client.get("/find/demo-blood-centre").status_code == 404
 
     def test_facility_with_outdated_identity_is_hidden(self, client, db, users, monkeypatch):
@@ -158,7 +172,11 @@ class TestMapData:
     def test_leaflet_pinned_and_osm_attributed(self, client, world):
         html = client.get("/find").text
         assert 'leaflet/1.9.4/leaflet.js"' in html and 'integrity="sha512-' in html
-        assert "tile.openstreetmap.org" in html and "OpenStreetMap" in html
+        # Default base map: OpenFreeMap vector style via MapLibre (pinned + SRI), raster fallback configured.
+        assert 'data-provider="openfreemap"' in html and "tiles.openfreemap.org/styles/liberty" in html
+        assert 'maplibre-gl/4.7.1/maplibre-gl.js"' in html and "maplibre-gl-leaflet@0.0.22" in html
+        assert html.count('integrity="sha384-') >= 3
+        assert "OpenFreeMap" in html and "OpenMapTiles" in html and "OpenStreetMap" in html
 
 
 # ================================================================ contacts
@@ -194,7 +212,8 @@ class TestAvailability:
     def test_filters_never_invent_stock(self, client, world):
         # No facility in this fixture has published anything (Phase 4 publishing is tested in test_availability.py).
         html = client.get("/find?group=B%2B&component=whole_blood").text
-        assert "No blood bank currently reports this as available" in html
+        assert "No participating blood bank has published current stock" in html
+        assert "does not mean blood is unavailable" in html
         assert "We never estimate stock" in html
         assert "Test Facility Alpha" in html                     # still listed to call directly
         html = client.get("/find?group=B%2B&component=platelets").text

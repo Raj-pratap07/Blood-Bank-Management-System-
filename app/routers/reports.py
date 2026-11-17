@@ -12,6 +12,7 @@ from app.services import reports
 from app.services.inventory import expire_overdue_units, stock_summary
 from app.services.scope import facility_id_of
 from app.web import current_user, parse_date_range, render, require_facility_user
+from app.utils import business_today
 
 router = APIRouter(prefix="/reports", dependencies=[Depends(require_facility_user)])
 
@@ -23,7 +24,7 @@ def _default_range(start: str | None, end: str | None) -> tuple[date, date, str 
     range falls back to the default 90-day window and returns a message.
     """
     rng = parse_date_range(start, end)
-    e = rng.end or date.today()
+    e = rng.end or business_today()
     s = rng.start or e - timedelta(days=90)
     return s, e, rng.error
 

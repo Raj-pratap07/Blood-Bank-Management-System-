@@ -35,9 +35,10 @@ from app.services import users as user_svc
 from app.services.errors import PermissionDenied, RecordNotFound, ServiceError
 from app.services.inventory import fefo_candidates, stock_summary
 from app.services.reports import dashboard_counts
+from app.utils import business_today
 from tests.conftest import PASSWORD, csrf_from, login, screening, vitals
 
-TODAY = date.today()
+TODAY = business_today()
 
 
 # ------------------------------------------------------------------ fixtures

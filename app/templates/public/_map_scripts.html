@@ -1,5 +1,14 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"
         integrity="sha512-BwHfrr4c9kmRkLw6iXFdzcdWV/PGkVgiIyIWLLlTSXzWQzxuSg4DiQUCpauz/EWjgk5TYQqX/kvn9pG1NpYfqg=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+{% if map.provider == 'openfreemap' %}
+{# MapLibre GL 4.7.1 + the official MapLibre-Leaflet bridge 0.0.22 (supports Leaflet ^1.9.3 / MapLibre ^4.3.2). #}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.js"
+        integrity="sha384-SYKAG6cglRMN0RVvhNeBY0r3FYKNOJtznwA0v7B5Vp9tr31xAHsZC0DqkQ/pZDmj"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"
+        integrity="sha384-4CB9Vtol9LN6lGgBCvmPLbUEZwilrqIvPieSRurgAXAB7FVJaLS9n8WyAIA5wjQ+"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+{% endif %}
 <script id="facility-data" type="application/json">{{ map_data | tojson }}</script>
 <script src="{{ url_for('static', path='js/public_map.js') }}"></script>

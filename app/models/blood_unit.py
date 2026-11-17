@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 from app.models.enums import BloodGroup, Product, UnitStatus, db_enum
-from app.utils import utcnow
+from app.utils import utcnow, business_today
 
 if TYPE_CHECKING:
     from app.models.blood_request import BloodRequest, Issue
@@ -40,8 +40,8 @@ class BloodUnit(Base):
     issue: Mapped[Issue | None] = relationship(back_populates="blood_unit", uselist=False)
 
     def days_to_expiry(self, on: date | None = None) -> int:
-        return (self.expires_on - (on or date.today())).days
+        return (self.expires_on - (on or business_today())).days
 
     def is_expired(self, on: date | None = None) -> bool:
         """A unit is usable up to and including its expiry date."""
-        return self.expires_on < (on or date.today())
+        return self.expires_on < (on or business_today())

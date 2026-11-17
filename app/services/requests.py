@@ -20,7 +20,7 @@ from app.services.errors import InventoryError, PermissionDenied, ServiceError
 from app.services.inventory import expire_overdue_units, fefo_candidates
 from app.services.scope import ensure_owned, facility_id_of
 from app.services.tx import transaction
-from app.utils import utcnow
+from app.utils import utcnow, business_today
 
 
 def create_request(db: Session, data: BloodRequestIn, actor: User) -> BloodRequest:
@@ -76,7 +76,7 @@ def approve_and_reserve(db: Session, req: BloodRequest, actor: User, note: str |
     ensure_owned(req, actor, "Request")
     if req.status not in OPEN_REQUEST_STATUSES:
         raise ServiceError(f"Request is {req.status.value} and cannot be approved.")
-    on = on or date.today()
+    on = on or business_today()
     expire_overdue_units(db, on)
 
     with transaction(db):
@@ -160,7 +160,7 @@ def issue_units(db: Session, req: BloodRequest, data: IssueIn, actor: User, on: 
         raise ServiceError("Bags can only be issued for a request approved by a medical officer.")
     if not data.crossmatch_confirmed:
         raise ServiceError("Laboratory crossmatch must be confirmed before issue.")
-    on = on or date.today()
+    on = on or business_today()
     expire_overdue_units(db, on)
 
     issues: list[Issue] = []

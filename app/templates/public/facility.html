@@ -58,7 +58,7 @@
               ({{ availability.published_at | ist }}) have expired, so they are no longer shown.</p>
             {% else %}
             <p class="small mb-1"><strong>Not published.</strong> This blood bank does not currently publish its
-              availability on Haldwani BloodLink.</p>
+              availability on this site.</p>
             {% endif %}
             <p class="small text-muted mb-0">Call the blood bank before travelling. We never estimate or guess stock levels.
               {% if f.eraktkosh_code %}e-RaktKosh centre code: <strong>{{ f.eraktkosh_code }}</strong>.{% endif %}
@@ -86,7 +86,8 @@
         <h2 class="h6 pub-panel-title"><i class="bi bi-geo-alt"></i> Location &amp; directions</h2>
         {% if f.location_verified %}
           <div id="map" class="pub-map pub-map-small mb-3" role="region" aria-label="Map showing {{ f.name }}"
-               data-tile-url="{{ map.tile_url }}" data-attribution="{{ map.attribution }}"
+               data-provider="{{ map.provider }}" data-style-url="{{ map.style_url }}" data-style-attribution="{{ map.style_attribution }}"
+             data-tile-url="{{ map.tile_url }}" data-attribution="{{ map.attribution }}"
                data-center="{{ map.center | tojson }}" data-zoom="{{ map.zoom }}" data-single="1"></div>
           <p class="small text-muted">{{ f.location_text }}</p>
         {% else %}

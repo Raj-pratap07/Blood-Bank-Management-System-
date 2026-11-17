@@ -26,6 +26,11 @@
               <div class="pub-stat-label">with a verified map location</div>
             </div>
           </div>
+          {% if candidates %}
+          <p class="small mt-3 mb-0"><i class="bi bi-hourglass-split"></i> <strong>{{ candidates }}</strong> more blood
+            bank{{ '' if candidates == 1 else 's' }} named in official sources {{ 'is' if candidates == 1 else 'are' }}
+            <a href="/find#under-verification">under verification</a> (contact details and location not yet verified).</p>
+          {% endif %}
           {% if count == 0 %}
           <p class="small text-muted mt-3 mb-0"><i class="bi bi-hourglass-split"></i> The directory is being built. Blood banks
             appear here only after their details are checked against official sources or confirmed by the facility itself.</p>

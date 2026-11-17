@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 from app.models.enums import BloodGroup, Gender, db_enum
-from app.utils import age_on, utcnow
+from app.utils import age_on, utcnow, business_today
 
 if TYPE_CHECKING:
     from app.models.donation import Donation
@@ -42,7 +42,7 @@ class Donor(Base):
     )
 
     def age(self, on: date | None = None) -> int:
-        return age_on(self.date_of_birth, on or date.today())
+        return age_on(self.date_of_birth, on or business_today())
 
     @property
     def last_donation_date(self) -> date | None:

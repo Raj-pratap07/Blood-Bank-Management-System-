@@ -13,6 +13,7 @@ from app.services.errors import ServiceError
 from app.services.inventory import expire_overdue_units, stock_summary
 from app.services.scope import facility_id_of
 from app.web import Page, current_user, flash, form_dict, get_owned_or_404, redirect, render, require_authorizer, require_facility_user
+from app.utils import business_today
 
 router = APIRouter(prefix="/inventory", dependencies=[Depends(require_facility_user)])
 
@@ -36,7 +37,7 @@ def list_units(request: Request, group: str = "", status: str = "", near_expiry:
     if status in UnitStatus:
         stmt = stmt.where(BloodUnit.status == UnitStatus(status))
     if near_expiry:
-        today = date.today()
+        today = business_today()
         stmt = stmt.where(BloodUnit.status == UnitStatus.AVAILABLE, BloodUnit.expires_on >= today,
                           BloodUnit.expires_on <= today + timedelta(days=settings.near_expiry_days))
     if q:

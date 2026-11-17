@@ -6,7 +6,7 @@ contains one bag in every state, so exactly ONE A+ bag is eligible:
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 from sqlalchemy import func, select, text
@@ -34,10 +34,10 @@ from app.services import facilities as fsvc
 from app.services import requests as req_svc
 from app.services import users as user_svc
 from app.services.errors import PermissionDenied, ServiceError
-from app.utils import utcnow
+from app.utils import utcnow, business_today
 from tests.conftest import PASSWORD, csrf_from, login, screening, vitals
 
-TODAY = date.today()
+TODAY = business_today()
 _phone = iter(range(9300000000, 9300009999))
 
 
@@ -226,7 +226,9 @@ class TestFreshness:
         page = client.get(f"/find/{lima['facility'].slug}").text
         assert "Not published" in page
         assert client.get("/api/public/availability").json()["results"] == []
-        assert "No blood bank currently reports this as available" in client.get("/find?group=A%2B").text
+        page = client.get("/find?group=A%2B").text
+        assert "No participating blood bank has published current stock" in page
+        assert "does not mean blood is unavailable" in page and "eraktkosh.mohfw.gov.in" in page
 
     def test_withdrawal_and_hidden_setting_remove_public_figures(self, client, db, lima):
         avail.publish(db, lima["mo"])
@@ -238,6 +240,43 @@ class TestFreshness:
         assert client.get("/api/public/availability").json()["results"] == []
         with pytest.raises(ServiceError, match="switched off"):
             avail.publish(db, lima["mo"])
+
+
+# ============================================= Phase 5A: M7 listing guard + API timestamps
+class TestListingGuardAndApiTimestamps:
+    def test_unlisted_facility_gets_no_view_even_with_current_publication(self, db, lima):
+        avail.publish(db, lima["mo"])
+        f = lima["facility"]
+        assert avail.public_view(db, f).state == "current"
+        f.is_listed = False                     # bypassing set_listed: the view itself must still refuse
+        db.commit()
+        v = avail.public_view(db, f)
+        assert v.state == "off" and v.cells == [] and v.published_at is None
+
+    def test_listing_blocker_gets_no_view(self, db, lima):
+        avail.publish(db, lima["mo"])
+        f = lima["facility"]
+        for c in f.contacts:                    # remove the only public phone -> listing is blocked
+            c.is_active = False
+        db.commit()
+        db.expire_all()
+        f = db.get(Facility, f.id)
+        assert f.is_listed and fsvc.listing_blockers(f)
+        assert avail.public_view(db, f).state == "off"
+
+    def test_api_timestamps_are_single_z_utc(self, client, db, lima):
+        pub = avail.publish(db, lima["mo"])
+        results = client.get("/api/public/availability").json()["results"]
+        assert results
+        for item in results:
+            for key in ("published_at", "valid_until"):
+                assert item[key].endswith("Z") and "+00:00" not in item[key] and item[key].count("Z") == 1
+        assert datetime.fromisoformat(results[0]["published_at"]) == pub.published_at
+        assert datetime.fromisoformat(results[0]["valid_until"]) == pub.valid_until
+        geo = client.get("/api/public/facilities").json()["features"]
+        stamps = [ft["properties"]["availability_published_at"] for ft in geo
+                  if ft["properties"].get("availability_published_at")]
+        assert stamps and all(s.endswith("Z") and "+00:00" not in s for s in stamps)
 
 
 # ====================================================== public display (11-12)
@@ -281,7 +320,7 @@ class TestPublicDisplay:
         avail.publish(db, lima["mo"])
         r = client.get("/find?group=AB%2B&component=whole_blood").text
         assert "Lima (fictional test)" in r and "Available" in r and "updated" in r
-        assert "No blood bank currently reports this as available" in client.get("/find?group=O-").text
+        assert "No participating blood bank currently reports this as available" in client.get("/find?group=O-").text
         assert "isn't tracked here" in client.get("/find?group=A%2B&component=platelets").text
         api = client.get("/api/public/availability?group=AB%2B&component=whole_blood&facility="
                          + lima["facility"].slug).json()["results"]
@@ -295,7 +334,10 @@ class TestPublicDisplay:
         fsvc.set_listed(db, lima["facility"], False, users["platform_admin"])
         avail.publish(db, lima["mo"])                          # allowed internally, but nothing public
         assert client.get("/api/public/availability").json()["results"] == []
-        assert client.get(f"/find/{lima['facility'].slug}").status_code == 404
+        # Unlisted but identity-confirmed: only the minimal "under verification" page, never its availability.
+        page = client.get(f"/find/{lima['facility'].slug}")
+        assert page.status_code == 200 and "shows no availability for this blood bank" in page.text
+        assert 'id="availability"' not in page.text and "Blood availability" not in page.text
 
 
 # ============================================================ 13: closure

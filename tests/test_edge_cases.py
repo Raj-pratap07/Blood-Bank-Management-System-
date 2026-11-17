@@ -32,6 +32,7 @@ from app.services import requests as req_svc
 from app.services.compatibility import is_compatible
 from app.services.eligibility import check_donor
 from app.services.errors import InventoryError, ServiceError
+from app.utils import business_today
 from tests.conftest import csrf_from, login, screening, vitals
 from tests.test_rejection_history import _legacy_engine
 
@@ -182,7 +183,7 @@ class TestReservedExpiry:
         old = make_unit(G.A_POS, days_ago=30)                     # expires in 5 days
         req = _request(db, users)
         req_svc.approve_and_reserve(db, req, users["medical_officer"])
-        later = date.today() + timedelta(days=6)                  # reserved bag is now past expiry
+        later = business_today() + timedelta(days=6)                  # reserved bag is now past expiry
         fresh = make_unit(G.A_POS, days_ago=1)
         assert req_svc.approve_and_reserve(db, req, users["medical_officer"], on=later) == 1
         db.expire_all()
@@ -211,14 +212,14 @@ class TestScreeningEdges:
 class TestEligibilityBoundaries:
     @pytest.mark.parametrize("gender,interval", [(Gender.MALE, 90), (Gender.FEMALE, 120)])
     def test_interval_boundary_after_previous(self, make_donor, gender, interval):
-        last = date.today() - timedelta(days=interval)
+        last = business_today() - timedelta(days=interval)
         donor = make_donor(gender=gender, last_external_donation_date=last)
         assert check_donor(donor).eligible                                         # exactly the interval
-        assert not check_donor(donor, on=date.today() - timedelta(days=1)).eligible  # one day short
+        assert not check_donor(donor, on=business_today() - timedelta(days=1)).eligible  # one day short
 
     def test_interval_boundary_before_later_donation(self, db, users, make_donor):
         donor = make_donor(gender=Gender.MALE)
-        later = date.today() - timedelta(days=1)
+        later = business_today() - timedelta(days=1)
         donation_svc.record_donation(db, donor, DonationIn(
             donor_id=donor.id, donation_date=later, cleared_by_id=users["medical_officer"].id, **vitals()),
             users["staff"])
@@ -228,7 +229,7 @@ class TestEligibilityBoundaries:
     def test_age_boundaries(self, make_donor):
         def donor_aged(years, days_offset=0, **kw):
             d = make_donor(**kw)
-            t = date.today()
+            t = business_today()
             d.date_of_birth = t.replace(year=t.year - years) + timedelta(days=days_offset)
             return d
         assert check_donor(donor_aged(18)).eligible                       # 18th birthday today

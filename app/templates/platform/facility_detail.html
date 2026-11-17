@@ -222,7 +222,7 @@
           <td>{{ m.vbadge({'status': v.status, 'entry': v}) }}</td>
           <td>{{ v.method | label }}</td>
           <td class="small">{{ v.evidence_note }}{% if v.source %}<div class="text-muted">Source: {{ v.source.title }}</div>{% endif %}</td>
-          <td class="pe-3 small">{{ v.verified_by.full_name }}<div class="text-muted">recorded {{ v.recorded_at.strftime('%d %b %Y %H:%M') }} UTC</div></td></tr>
+          <td class="pe-3 small">{{ v.verified_by.full_name }}<div class="text-muted">recorded {{ v.recorded_at | dt }}</div></td></tr>
     {% else %}{{ m.empty(6, "No verifications recorded. Every scope is unverified.") }}{% endfor %}
     </tbody>
   </table></div>

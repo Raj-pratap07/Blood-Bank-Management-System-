@@ -23,6 +23,7 @@ from app.models import (
     FacilityContact,
     SourceType,
     VerificationScope,
+    OperationalStatus,
     VerificationStatus,
 )
 from app.services import availability as avail
@@ -81,6 +82,23 @@ class PublicFacility:
                         "href": c.href} for c in self.phones],
             "directions": self.directions, "url": f"/find/{self.slug}",
         }
+
+
+@dataclass
+class CandidateFacility:
+    """A real facility named in an official source but not yet verified for public listing.
+
+    Deliberately minimal: name, district and provenance only. No contacts, no address, no
+    coordinates and no availability, whatever is stored, because none of it is verified yet.
+    """
+    slug: str
+    name: str
+    official_name: str | None
+    aliases: list[str]
+    area: str
+    identity_text: str
+    missing: list[str]
+    evidence: list[dict]
 
 
 # ------------------------------------------------------------------ helpers
@@ -177,3 +195,43 @@ def public_facility(db: Session, slug: str) -> PublicFacility | None:
 def availability(db: Session, f: PublicFacility) -> avail.PublicAvailability:
     """Current facility-published availability for a PUBLIC facility (else an 'off'/stale state)."""
     return avail.public_view(db, f.facility)
+
+
+# ------------------------------------------------------------------ under verification
+def _missing(f: Facility) -> list[str]:
+    out = []
+    if not (f.address_line and f.city):
+        out.append("verified address")
+    if not any(c.kind == ContactKind.PHONE and c.is_active and c.is_public for c in f.contacts):
+        out.append("sourced public phone number")
+    if not fsvc.map_eligible(f):
+        out.append("verified map location")
+    return out
+
+
+def _to_candidate(f: Facility, identity: fsvc.EffectiveStatus) -> CandidateFacility:
+    return CandidateFacility(
+        slug=f.slug, name=f.display_name, official_name=f.official_name, aliases=f.alias_list,
+        area=", ".join(x for x in (f.district, f.state) if x),
+        identity_text=_status_text(identity, "Identity"), missing=_missing(f), evidence=_evidence(f))
+
+
+def candidate_facilities(db: Session) -> list[CandidateFacility]:
+    """Real (non-demo), not-closed facilities with a current confirmed identity that are not publicly listed."""
+    stmt = (select(Facility)
+            .where(Facility.is_demo.is_(False), Facility.operational_status != OperationalStatus.CLOSED)
+            .options(selectinload(Facility.contacts), selectinload(Facility.verifications),
+                     selectinload(Facility.sources))
+            .order_by(Facility.display_name))
+    out = []
+    for f in db.scalars(stmt):
+        if f.is_listed and not fsvc.listing_blockers(f):
+            continue                                            # fully public listing instead
+        identity = fsvc.scope_status(f, VerificationScope.IDENTITY)
+        if identity.status in fsvc.CONFIRMED_IDENTITY:
+            out.append(_to_candidate(f, identity))
+    return out
+
+
+def candidate_facility(db: Session, slug: str) -> CandidateFacility | None:
+    return next((c for c in candidate_facilities(db) if c.slug == slug), None)

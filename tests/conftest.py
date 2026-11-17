@@ -24,6 +24,7 @@ from app.schemas.forms import DonationIn, DonorIn, ScreeningIn  # noqa: E402
 from app.services import donations as donation_svc  # noqa: E402
 from app.services import donors as donor_svc  # noqa: E402
 from app.services.security import hash_password  # noqa: E402
+from app.utils import business_today  # noqa: E402
 
 PASSWORD = "Password@123"
 
@@ -81,7 +82,7 @@ _phone = iter(range(9000000000, 9999999999))
 @pytest.fixture()
 def make_donor(db, users):
     def _make(group=BloodGroup.O_POS, gender=Gender.MALE, age=30, weight=65.0, actor=None, **kw):
-        dob = date.today().replace(year=date.today().year - age) - timedelta(days=10)
+        dob = business_today().replace(year=business_today().year - age) - timedelta(days=10)
         data = DonorIn(full_name=kw.pop("name", "Test Donor"), gender=gender, date_of_birth=dob,
                        blood_group=group, phone=str(next(_phone)), weight_kg=weight, **kw)
         return donor_svc.create_donor(db, data, actor or users["staff"])
@@ -100,7 +101,7 @@ def make_unit(db, users, make_donor):
     """Create a donor + donation and screen it as accepted. Returns the bag."""
     def _make(group=BloodGroup.O_POS, days_ago=1, accept=True):
         donor = make_donor(group=group)
-        d = date.today() - timedelta(days=days_ago)
+        d = business_today() - timedelta(days=days_ago)
         donation = donation_svc.record_donation(
             db, donor, DonationIn(donor_id=donor.id, donation_date=d,
                                   cleared_by_id=users["medical_officer"].id, **vitals()),

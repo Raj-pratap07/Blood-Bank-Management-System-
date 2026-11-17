@@ -7,6 +7,7 @@ FastAPI parameters typed `date | None` only default to None when the parameter i
 from __future__ import annotations
 
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -17,8 +18,11 @@ from app.services import requests as req_svc
 from app.web import parse_date_range
 from tests.conftest import login
 
-# Three issues on fixed dates (issued_at overridden after creation).
-ISSUE_TIMES = [datetime(2026, 9, 10, 9, 0), datetime(2026, 10, 15, 12, 0), datetime(2026, 11, 5, 23, 59)]
+# Three issues on fixed IST dates (issued_at overridden after creation). Filters work on IST calendar
+# days; the last one is 23:59 IST (18:29 UTC) on the To date, checking the inclusive end of the range.
+IST = ZoneInfo("Asia/Kolkata")
+ISSUE_TIMES = [datetime(2026, 9, 10, 9, 0, tzinfo=IST), datetime(2026, 10, 15, 12, 0, tzinfo=IST),
+               datetime(2026, 11, 5, 23, 59, tzinfo=IST)]
 
 
 @pytest.fixture()
@@ -133,18 +137,19 @@ class TestParseDateRange:
 
 
 class TestTimezoneLabels:
-    """Issue/request timestamps are UTC; date filters on them must say so."""
+    """Timestamps are stored in UTC but filtered and shown on IST calendar days; the labels must say so."""
 
-    def test_issue_history_labels_utc(self, client):
+    def test_issue_history_labels_ist(self, client):
         login(client, "staff")
         html = client.get("/issues").text
-        assert "From (UTC date)" in html and "To (UTC date)" in html and "Issued at (UTC)" in html
+        assert "From (IST date)" in html and "To (IST date)" in html and "Issued at (IST)" in html
+        assert "UTC date" not in html and "Issued at (UTC)" not in html
 
-    @pytest.mark.parametrize("path,label", [("/reports/issues", "From (UTC date)"),
-                                            ("/reports/requests", "From (UTC date)")])
-    def test_utc_reports_label_utc(self, client, path, label):
+    @pytest.mark.parametrize("path", ["/reports/issues", "/reports/requests"])
+    def test_timestamp_reports_label_ist(self, client, path):
         login(client, "staff")
-        assert label in client.get(path).text
+        html = client.get(path).text
+        assert "From (IST date)" in html and "To (IST date)" in html and "UTC date" not in html
 
     def test_donation_report_is_not_labelled_utc(self, client):
         login(client, "staff")

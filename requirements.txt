@@ -6,6 +6,8 @@ python-multipart==0.0.33
 itsdangerous==2.2.0
 bcrypt==5.0.0
 pydantic==2.14.3
+# IANA time-zone database (Asia/Kolkata); Windows has no system tz database
+tzdata==2026.6
 
 # testing
 pytest==9.2.0

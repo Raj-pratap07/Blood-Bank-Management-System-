@@ -85,14 +85,21 @@ def check_secret_key(app_env: str | None, secret_key: str | None) -> None:
 
 
 class Settings:
-    app_name: str = "Haldwani BloodLink"
+    app_name: str = "Blood Bank Management System"
+    app_subtitle: str = "Haldwani Blood Bank Directory and Management Platform"
     app_env: str = os.getenv("APP_ENV", "development")
+    # Business time zone: calendar days (expiry, eligibility, reports, form defaults) and displayed
+    # times use it. Stored event timestamps are always UTC.
+    timezone: str = _env("TIMEZONE", "Asia/Kolkata")
     secret_key: str = _env("SECRET_KEY", DEV_SECRET_KEY)
     database_url: str = _env("DATABASE_URL", f"sqlite:///{(BASE_DIR / 'bloodbank.db').as_posix()}")
     session_max_age_seconds: int = _env("SESSION_MAX_AGE", 8 * 60 * 60, int)
     # Secure cookie flag. None = automatic: on when APP_ENV=production, off otherwise
     # (local development runs over plain HTTP). Set true/false to override.
     session_https_only: bool | None = _env("SESSION_HTTPS_ONLY", None, _bool)
+    # Public demonstration (e.g. Render Free): synthetic data rebuilt on every start, a "data resets" banner,
+    # and account / password / facility-directory changes disabled (see app.web.demo_guard).
+    demo_mode: bool = _env("DEMO_MODE", False, _bool)
 
     # --- Inventory --------------------------------------------------------
     # Whole blood in CPDA-1 is the only product supported in this MVP.
@@ -114,14 +121,25 @@ class Settings:
     pulse_range: tuple[int, int] = (60, 100)
     max_temperature_c: float = _env("MAX_TEMP_C", 37.5, float)
 
-    # --- Facility directory (Haldwani BloodLink) ----------------------------
+    # --- Facility directory ---------------------------------------------------
     # A positive verification older than this is shown as "outdated" until re-checked.
     verification_max_age_days: int = _env("VERIFICATION_MAX_AGE_DAYS", 180, int)
 
-    # --- Public map (Haldwani BloodLink Phase 2) ------------------------------
-    # OpenStreetMap's tile server is for light use only and requires attribution:
-    # https://operations.osmfoundation.org/policies/tiles/ . Point this at another
-    # provider (and update the attribution) if traffic grows.
+    # --- Public map ---------------------------------------------------------------
+    # MAP_PROVIDER:
+    #   "openfreemap" (default): OpenFreeMap vector tiles rendered by MapLibre GL inside Leaflet.
+    #       Free, no API key, no registration, no cookies (https://openfreemap.org/). Needs WebGL;
+    #       without it the map falls back to the raster MAP_TILE_URL below.
+    #   "raster": any XYZ raster tile URL in MAP_TILE_URL (e.g. OpenStreetMap's own tile server,
+    #       which is for light use only, requires a Referer header and attribution:
+    #       https://operations.osmfoundation.org/policies/tiles/).
+    map_provider: str = _env("MAP_PROVIDER", "openfreemap")
+    map_style_url: str = _env("MAP_STYLE_URL", "https://tiles.openfreemap.org/styles/liberty")
+    map_style_attribution: str = _env(
+        "MAP_STYLE_ATTRIBUTION",
+        '<a href="https://openfreemap.org" rel="noopener">OpenFreeMap</a> '
+        '&copy; <a href="https://www.openmaptiles.org/" rel="noopener">OpenMapTiles</a> '
+        'Data from <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a>')
     map_tile_url: str = _env("MAP_TILE_URL", "https://tile.openstreetmap.org/{z}/{x}/{y}.png")
     map_attribution: str = _env(
         "MAP_ATTRIBUTION",
@@ -178,6 +196,14 @@ def validate_settings(s: Settings) -> None:
     need(1 <= s.availability_max_hours <= 48, "BBMS_AVAILABILITY_MAX_HOURS", "must be between 1 and 48 hours")
     need(1 <= s.availability_low_max <= 20, "BBMS_AVAILABILITY_LOW_MAX", "must be between 1 and 20 units")
     need(1 <= s.setup_link_valid_hours <= 168, "BBMS_SETUP_LINK_VALID_HOURS", "must be between 1 and 168 hours")
+    need(s.map_provider in ("openfreemap", "raster"), "BBMS_MAP_PROVIDER", "must be 'openfreemap' or 'raster'")
+    need(s.map_style_url.startswith("https://") and s.map_tile_url.startswith("https://"),
+         "BBMS_MAP_STYLE_URL / BBMS_MAP_TILE_URL", "must be https:// URLs")
+    try:
+        from zoneinfo import ZoneInfo
+        ZoneInfo(s.timezone)
+    except Exception:  # noqa: BLE001 - unknown key, bad path or missing tz database
+        problems.append(f"BBMS_TIMEZONE: unknown time zone {s.timezone!r} (install tzdata on Windows)")
     if problems:
         raise ConfigurationError("Invalid configuration: " + "; ".join(problems))
 

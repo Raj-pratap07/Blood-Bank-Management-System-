@@ -3,7 +3,7 @@
 {% block title %}Issuing history report{% endblock %}
 {% block content %}
 {{ m.page_header("Issuing history report", (start | d) ~ " – " ~ (end | d)) }}
-{% set date_tz = "UTC" %}{% set date_basis = "the UTC issue date (issue times are shown in UTC; IST = UTC + 5:30)" %}
+{% set date_tz = "IST" %}{% set date_basis = "the IST calendar day of issue (issue times are shown in IST, UTC + 5:30)" %}
 {% include "partials/report_filter.html" %}
 {% include "partials/issues_table.html" %}
 {% endblock %}

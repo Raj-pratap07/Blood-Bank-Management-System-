@@ -15,6 +15,7 @@ from app.services.eligibility import check_donor
 from app.services.errors import EligibilityError, ServiceError
 from app.services.scope import facility_id_of
 from app.web import Page, current_user, flash, form_dict, get_owned_or_404, redirect, render, require_authorizer, require_facility_user, validate
+from app.utils import business_today
 
 router = APIRouter(prefix="/donations", dependencies=[Depends(require_facility_user)])
 
@@ -50,7 +51,7 @@ def _own_donor(db: Session, donor_id: int | None, user: User) -> Donor | None:
 def new_donation_form(request: Request, donor_id: int | None = None, user: User = Depends(current_user),
                       db: Session = Depends(get_db)):
     donor = _own_donor(db, donor_id, user)
-    form = {"donation_date": date.today().isoformat(), "volume_ml": "350",
+    form = {"donation_date": business_today().isoformat(), "volume_ml": "350",
             "weight_kg": donor.weight_kg if donor else "",
             "cleared_by_id": user.id if user.can_authorize else ""}
     return render(request, "donations/form.html", _form_ctx(db, user, donor, form, {}))

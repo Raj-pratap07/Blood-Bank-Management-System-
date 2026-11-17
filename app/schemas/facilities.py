@@ -17,6 +17,7 @@ from app.models.enums import (
     VerificationStatus,
 )
 from app.schemas.forms import EMAIL_RE, FormModel, _phone
+from app.utils import business_today
 
 OptStr = Annotated[str | None, StringConstraints(strip_whitespace=True, max_length=300)]
 URL_RE = re.compile(r"^https?://[^\s/$.?#][^\s]*$", re.IGNORECASE)
@@ -92,7 +93,7 @@ class SourceIn(FormModel):
     @field_validator("retrieved_on")
     @classmethod
     def _not_future(cls, v: date) -> date:
-        if v > date.today():
+        if v > business_today():
             raise ValueError("Retrieval date cannot be in the future.")
         return v
 
@@ -142,7 +143,7 @@ class VerificationIn(FormModel):
     @field_validator("verified_on")
     @classmethod
     def _not_future(cls, v: date) -> date:
-        if v > date.today():
+        if v > business_today():
             raise ValueError("Verification date cannot be in the future.")
         return v
 

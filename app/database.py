@@ -2,16 +2,19 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import datetime
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import settings
+from app.db_types import UTCDateTime
 
 
 class Base(DeclarativeBase):
-    pass
+    # Every Mapped[datetime] column is an aware-UTC timestamp (SQLite DDL stays DATETIME).
+    type_annotation_map = {datetime: UTCDateTime}
 
 
 def make_engine(url: str) -> Engine:

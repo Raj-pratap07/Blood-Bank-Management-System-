@@ -16,10 +16,13 @@ from pydantic import (
 )
 
 from app.models.enums import BloodGroup, Gender, RequestPriority, Role, TestResult
+from app.utils import business_today
 
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=120)]
 OptText = Annotated[str | None, StringConstraints(strip_whitespace=True, max_length=1000)]
 PHONE_RE = re.compile(r"^\+?[0-9][0-9\- ]{6,18}[0-9]$")
+PHONE_MAX_LEN = 20     # donors.phone / blood_requests.requester_phone are String(20)
+EMAIL_MAX_LEN = 120    # donors.email is String(120)
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -32,7 +35,10 @@ def _phone(v: str) -> str:
         raise ValueError("Enter a valid phone number (digits, optional +, spaces or dashes).")
     # Store one canonical form so "98765 43210" and "98765-43210" match "9876543210"
     # in the duplicate-donor check.
-    return re.sub(r"[\s-]", "", v)
+    v = re.sub(r"[\s-]", "", v)
+    if len(v) > PHONE_MAX_LEN:  # the stored column is VARCHAR(20); PostgreSQL would reject longer values
+        raise ValueError(f"Phone number is too long (at most {PHONE_MAX_LEN} characters without spaces or dashes).")
+    return v
 
 
 class DonorIn(FormModel):
@@ -52,6 +58,8 @@ class DonorIn(FormModel):
     @field_validator("email")
     @classmethod
     def _email(cls, v: str | None) -> str | None:
+        if v and len(v) > EMAIL_MAX_LEN:
+            raise ValueError(f"Email address is too long (at most {EMAIL_MAX_LEN} characters).")
         if v and not EMAIL_RE.match(v):
             raise ValueError("Enter a valid email address.")
         return v or None
@@ -59,7 +67,7 @@ class DonorIn(FormModel):
     @field_validator("date_of_birth")
     @classmethod
     def _dob(cls, v: date) -> date:
-        if v >= date.today():
+        if v >= business_today():
             raise ValueError("Date of birth must be in the past.")
         if v.year < 1900:
             raise ValueError("Date of birth is not plausible.")
@@ -68,7 +76,7 @@ class DonorIn(FormModel):
     @field_validator("last_external_donation_date")
     @classmethod
     def _ext(cls, v: date | None) -> date | None:
-        if v and v > date.today():
+        if v and v > business_today():
             raise ValueError("Previous donation date cannot be in the future.")
         return v
 
@@ -97,7 +105,7 @@ class DonationIn(FormModel):
     @field_validator("donation_date")
     @classmethod
     def _not_future(cls, v: date) -> date:
-        if v > date.today():
+        if v > business_today():
             raise ValueError("Donation date cannot be in the future.")
         return v
 
@@ -145,7 +153,7 @@ class BloodRequestIn(FormModel):
     @field_validator("required_by")
     @classmethod
     def _future(cls, v: date | None) -> date | None:
-        if v and v < date.today():
+        if v and v < business_today():
             raise ValueError("Required-by date cannot be in the past.")
         return v
 

@@ -32,6 +32,7 @@ from app.models import (
 from app.schemas.facilities import ContactIn, FacilityIn, LocationIn, SourceIn, VerificationIn
 from app.services.errors import PermissionDenied, ServiceError
 from app.services.tx import transaction
+from app.utils import business_today
 
 S = VerificationStatus
 CONFIRMED_IDENTITY = (S.SOURCE_CONFIRMED, S.FACILITY_CONFIRMED)
@@ -208,7 +209,7 @@ class EffectiveStatus:
 def _effective(entry: FacilityVerification | None, today: date | None = None) -> EffectiveStatus:
     if entry is None:
         return EffectiveStatus(S.UNVERIFIED, None)
-    today = today or date.today()
+    today = today or business_today()
     if entry.status.is_positive and (today - entry.verified_on) > timedelta(days=settings.verification_max_age_days):
         return EffectiveStatus(S.OUTDATED, entry)
     return EffectiveStatus(entry.status, entry)

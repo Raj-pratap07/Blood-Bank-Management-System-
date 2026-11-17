@@ -53,7 +53,7 @@
           {% endfor %}
           <tr><th>ABO/Rh confirmed</th><td>{{ 'Yes' if donation.abo_rh_confirmed else 'No' }}</td></tr>
           <tr><th>Decision</th><td>{{ m.badge(donation.status) }}</td></tr>
-          <tr><th>Screened by</th><td>{{ donation.screened_by.full_name if donation.screened_by else '—' }} · {{ donation.screened_at.strftime('%d %b %Y %H:%M') if donation.screened_at else '' }} UTC</td></tr>
+          <tr><th>Screened by</th><td>{{ donation.screened_by.full_name if donation.screened_by else '—' }} · {{ donation.screened_at | dt if donation.screened_at else '' }}</td></tr>
           <tr><th>Notes</th><td>{{ donation.screening_notes or '—' }}</td></tr>
         </table>
       {% elif user.can_authorize %}

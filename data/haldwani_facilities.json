@@ -1,0 +1,91 @@
+[
+  {
+    "display_name": "Sushila Tiwari Govt. Hosp.",
+    "official_name": "Sushila Tiwari Govt. Hosp.",
+    "district": "Nainital",
+    "state": "Uttarakhand",
+    "operational_status": "unknown",
+    "notes": "Listed under Nainital in the NHM Uttarakhand blood bank / storage centre list (undated). Address, phone numbers and coordinates are not yet sourced, so the facility is not listed publicly and has no map marker. No stock data.",
+    "sources": [
+      {"key": "nhm", "source_type": "government_document",
+       "title": "NHM Uttarakhand: Blood Bank / Storage Center list (undated)",
+       "reference": "https://nhm.uk.gov.in/files/Blood_Bank__Storage_Center_list.pdf",
+       "retrieved_on": "2026-11-17",
+       "notes": "Facility named under district Nainital. On 2026-11-17 the URL returned HTTP 404; the entry was confirmed from project research and a search-engine index of the same document. The document is undated: re-check against e-RaktKosh."}
+    ],
+    "verifications": [
+      {"scope": "identity", "status": "source_confirmed", "method": "official_source_check", "source": "nhm",
+       "verified_on": "2026-11-17",
+       "evidence_note": "Named as 'Sushila Tiwari Govt. Hosp.' under Nainital in the NHM Uttarakhand blood bank list. No direct contact with the facility."}
+    ],
+    "list": false
+  },
+  {
+    "display_name": "SSJ Base Haldwani",
+    "official_name": "SSJ Base Haldwani",
+    "district": "Nainital",
+    "state": "Uttarakhand",
+    "operational_status": "unknown",
+    "notes": "Listed under Nainital in the NHM Uttarakhand blood bank / storage centre list (undated). Address, phone numbers and coordinates are not yet sourced, so the facility is not listed publicly and has no map marker. No stock data.",
+    "sources": [
+      {"key": "nhm", "source_type": "government_document",
+       "title": "NHM Uttarakhand: Blood Bank / Storage Center list (undated)",
+       "reference": "https://nhm.uk.gov.in/files/Blood_Bank__Storage_Center_list.pdf",
+       "retrieved_on": "2026-11-17",
+       "notes": "Facility named under district Nainital (text extraction shows 'SSj Base Haldwani'). On 2026-11-17 the URL returned HTTP 404; the entry was confirmed from project research and a search-engine index of the same document. The document is undated: re-check against e-RaktKosh."},
+      {"key": "nhm2526", "source_type": "government_document",
+       "title": "NHM 2025-26 approval document (mentions SSJ Base Haldwani Blood Bank)",
+       "reference": "https://cdnbbsr.s3waas.gov.in/s37993e11204b215b27694b6f139e34ce8/uploads/2025/05/20250529939844366.pdf",
+       "retrieved_on": "2026-11-17",
+       "notes": "Supporting reference supplied by project research. Scanned PDF: its text could not be machine-checked when this record was loaded. Not used as evidence for any verification."}
+    ],
+    "verifications": [
+      {"scope": "identity", "status": "source_confirmed", "method": "official_source_check", "source": "nhm",
+       "verified_on": "2026-11-17",
+       "evidence_note": "Named as 'SSJ Base Haldwani' under Nainital in the NHM Uttarakhand blood bank list. No direct contact with the facility."}
+    ],
+    "list": false
+  },
+  {
+    "display_name": "Haldwani City Blood Bank",
+    "official_name": "Haldwani City Blood Bank",
+    "district": "Nainital",
+    "state": "Uttarakhand",
+    "operational_status": "unknown",
+    "notes": "Listed under Nainital in the NHM Uttarakhand blood bank / storage centre list (undated). Address, phone numbers and coordinates are not yet sourced, so the facility is not listed publicly and has no map marker. No stock data.",
+    "sources": [
+      {"key": "nhm", "source_type": "government_document",
+       "title": "NHM Uttarakhand: Blood Bank / Storage Center list (undated)",
+       "reference": "https://nhm.uk.gov.in/files/Blood_Bank__Storage_Center_list.pdf",
+       "retrieved_on": "2026-11-17",
+       "notes": "Facility named under district Nainital. On 2026-11-17 the URL returned HTTP 404; the entry was confirmed from project research and a search-engine index of the same document. The document is undated: re-check against e-RaktKosh."}
+    ],
+    "verifications": [
+      {"scope": "identity", "status": "source_confirmed", "method": "official_source_check", "source": "nhm",
+       "verified_on": "2026-11-17",
+       "evidence_note": "Named as 'Haldwani City Blood Bank' under Nainital in the NHM Uttarakhand blood bank list. No direct contact with the facility."}
+    ],
+    "list": false
+  },
+  {
+    "display_name": "Lt. Sh. Bal Kishan Devki Joshi Charitable Blood Bank",
+    "official_name": "Lt. Sh. Bal Kishan Devki Joshi Charitable Blood Bank",
+    "district": "Nainital",
+    "state": "Uttarakhand",
+    "operational_status": "unknown",
+    "notes": "Listed under Nainital in the NHM Uttarakhand blood bank / storage centre list (undated). Address, phone numbers and coordinates are not yet sourced, so the facility is not listed publicly and has no map marker. No stock data.",
+    "sources": [
+      {"key": "nhm", "source_type": "government_document",
+       "title": "NHM Uttarakhand: Blood Bank / Storage Center list (undated)",
+       "reference": "https://nhm.uk.gov.in/files/Blood_Bank__Storage_Center_list.pdf",
+       "retrieved_on": "2026-11-17",
+       "notes": "Facility named under district Nainital. On 2026-11-17 the URL returned HTTP 404; the entry was confirmed from project research and a search-engine index of the same document. The document is undated: re-check against e-RaktKosh."}
+    ],
+    "verifications": [
+      {"scope": "identity", "status": "source_confirmed", "method": "official_source_check", "source": "nhm",
+       "verified_on": "2026-11-17",
+       "evidence_note": "Named as 'Lt. Sh. Bal Kishan Devki Joshi Charitable Blood Bank' under Nainital in the NHM Uttarakhand blood bank list. No direct contact with the facility."}
+    ],
+    "list": false
+  }
+]

@@ -29,6 +29,7 @@ from app.services import users as user_svc
 from app.services import facilities as svc
 from app.services.errors import ServiceError
 from app.web import flash, form_dict, get_or_404, redirect, render, require_platform_admin, validate
+from app.utils import business_today
 
 router = APIRouter(prefix="/platform", dependencies=[Depends(require_platform_admin)])
 
@@ -140,7 +141,7 @@ def _detail(request: Request, db: Session, facility: Facility, section: str | No
         "options": OPTIONS, "section": section, "form": form or {}, "errors": errors or {},
         "account_count": user_svc.account_count(db, facility.id),
         "pending_setup": user_svc.pending_setup_accounts(db, facility.id), "setup_link": setup_link,
-        "today": date.today().isoformat(),
+        "today": business_today().isoformat(),
     }, status_code=status_code)
     if setup_link:
         # The page contains a raw one-time credential: never cache it, never leak it via Referer.

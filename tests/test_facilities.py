@@ -27,10 +27,11 @@ from app.schemas.facilities import ContactIn, FacilityIn, LocationIn, SourceIn, 
 from app.services import facilities as svc
 from app.services import users as user_svc
 from app.services.errors import PermissionDenied, ServiceError
+from app.utils import business_today
 from tests.conftest import PASSWORD, csrf_from, login
 
 V = VerificationStatus
-TODAY = date.today()
+TODAY = business_today()
 
 
 # ------------------------------------------------------------------ helpers

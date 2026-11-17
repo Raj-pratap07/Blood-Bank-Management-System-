@@ -1,5 +1,7 @@
 # Blood Bank Management System
 
+*Haldwani Blood Bank Directory and Management Platform*
+
 A web application for a single blood centre, covering donor registration, donations with screening
 quarantine, inventory tracked bag by bag with FEFO issue, blood requests that need medical approval,
 issuing, and reports.
@@ -53,7 +55,7 @@ the app anywhere other than your own machine.
 ```bash
 pytest -q
 ```
-There are 445 tests. They use a temporary database per test and never touch `bloodbank.db`.
+There are 558 tests. They use a temporary database per test and never touch `bloodbank.db`.
 
 ---
 
@@ -77,7 +79,7 @@ Hiding buttons in the UI is never the only protection.
 
 ---
 
-**Platform Administrator** (Haldwani BloodLink). This role manages the facility directory, its
+**Platform Administrator** (facility directory). This role manages the facility directory, its
 sources, contacts and verification log, under `/platform/facilities`. It has **no access** to any
 operational data: donors, donations, inventory, requests, reports or the operational API all return
 403. Facility administrators cannot create, see, deactivate or reset platform administrators. On an
@@ -260,6 +262,7 @@ over, delete the demo file instead.
 | `BBMS_NEAR_EXPIRY_DAYS` | `7` |
 | `BBMS_SESSION_MAX_AGE` | `28800` (seconds, minimum 60) |
 | `BBMS_SESSION_HTTPS_ONLY` | automatic: `true` when `APP_ENV=production`, otherwise `false`. Accepts true/false/1/0/yes/no/on/off |
+| `BBMS_TIMEZONE` | `Asia/Kolkata`. Business time zone for calendar days and displayed times (section 10). Must be a valid IANA name; the pinned `tzdata` package supplies the database on Windows |
 | eligibility thresholds | see section 3 |
 
 **Production secret key.** The secret key signs login sessions, so anyone who knows it can forge a
@@ -293,15 +296,15 @@ interval. These are software sanity limits, not clinical validation of the value
 
 | Version | Change |
 |---|---|
-| 4 | Haldwani BloodLink Phase 4. Adds the `availability_publications` and `availability_entries` tables (append-only except for a single withdrawal; the publisher and the publication must belong to the same facility). Adds first-login fields to `users`: `must_change_password`, `password_set_at`, `setup_token_hash` and `setup_token_expires_at`. Additive only. |
-| 3 | Haldwani BloodLink Phase 3. Adds `facility_id` to `users`, `donors`, `donations`, `blood_units`, `blood_requests` and `issues`, with indexes. All existing rows go to the fictional demo facility; platform admins get none. Donor phone becomes unique **per facility**. Adds 30 triggers that make `facility_id` required and unchangeable and reject every cross-facility link. Marks the demo facility as participating. To revert, restore the verified pre-v3 backup: SQLite cannot drop a column that has a foreign key. |
-| 2 | Haldwani BloodLink Phase 1. Adds the `facilities`, `facility_sources`, `facility_contacts` and `facility_verifications` tables and their indexes. Adds triggers so that evidence must belong to the same facility, and so the verification log is append-only. Inserts one row: a **fictional**, never-listed "Demo Blood Centre (fictional)". No real facility data is inserted. |
+| 4 | Directory Phase 4. Adds the `availability_publications` and `availability_entries` tables (append-only except for a single withdrawal; the publisher and the publication must belong to the same facility). Adds first-login fields to `users`: `must_change_password`, `password_set_at`, `setup_token_hash` and `setup_token_expires_at`. Additive only. |
+| 3 | Directory Phase 3. Adds `facility_id` to `users`, `donors`, `donations`, `blood_units`, `blood_requests` and `issues`, with indexes. All existing rows go to the fictional demo facility; platform admins get none. Donor phone becomes unique **per facility**. Adds 30 triggers that make `facility_id` required and unchangeable and reject every cross-facility link. Marks the demo facility as participating. To revert, restore the verified pre-v3 backup: SQLite cannot drop a column that has a foreign key. |
+| 2 | Directory Phase 1. Adds the `facilities`, `facility_sources`, `facility_contacts` and `facility_verifications` tables and their indexes. Adds triggers so that evidence must belong to the same facility, and so the verification log is append-only. Inserts one row: a **fictional**, never-listed "Demo Blood Centre (fictional)". No real facility data is inserted. |
 | 1 | Adds `blood_requests.rejected_by_id` and `rejected_at`. Rejecting a request no longer overwrites `approved_by`. On legacy *rejected* rows, the officer stored in `approved_by` (who was actually the one who rejected the request) is moved to `rejected_by`. |
 
 Back up `bloodbank.db` before upgrading a database that holds real data:
 `python -m scripts.backup_db --label pre-upgrade`. This makes a consistent online copy in `backups/` and keeps it only if its integrity check passes and every table's row count and the schema version match the source.
 
-## 9. Haldwani BloodLink: facility directory (Phase 1)
+## 9. Haldwani facility directory (Phase 1)
 The system is being extended into a regional platform for Haldwani. Phase 1 adds a facility
 directory with provenance. **No real facility is pre-loaded.** Every fact about a real blood bank must
 be entered by a platform administrator together with the source it came from.
@@ -359,10 +362,53 @@ All visibility rules live in `app/services/public.py`:
 - **Directions** are hand-off links to Google Maps and OpenStreetMap. This app does no routing.
 - **Near me** sorts by straight-line distance using browser geolocation, entirely in the browser. No request is
   sent to the server.
-- **Map tiles:** Leaflet 1.9.4 is pinned with SRI hashes, and the tiles are standard OpenStreetMap (attribution
-  shown). Change `BBMS_MAP_TILE_URL` and `BBMS_MAP_ATTRIBUTION` for another provider. When no location is
-  verified, the map opens on Haldwani's city centre (from OpenStreetMap Nominatim, way 112883732) for
-  orientation only.
+- **Base map:** Leaflet 1.9.4, pinned with SRI hashes. The provider is configurable:
+  - `BBMS_MAP_PROVIDER=openfreemap` (default): [OpenFreeMap](https://openfreemap.org/) vector tiles, style
+    `BBMS_MAP_STYLE_URL` (default `https://tiles.openfreemap.org/styles/liberty`), rendered with MapLibre GL
+    4.7.1 and the official `maplibre-gl-leaflet` 0.0.22 bridge, both pinned with SRI. OpenFreeMap is free and
+    needs no key, registration or cookies. Attribution (`BBMS_MAP_STYLE_ATTRIBUTION`): "OpenFreeMap ©
+    OpenMapTiles Data from OpenStreetMap". It needs WebGL; without WebGL the map falls back to the raster
+    tiles below.
+  - `BBMS_MAP_PROVIDER=raster`: any XYZ raster URL in `BBMS_MAP_TILE_URL`, with `BBMS_MAP_ATTRIBUTION`.
+    The default is OpenStreetMap's tile server. Its [policy](https://operations.osmfoundation.org/policies/tiles/)
+    requires a `Referer` header and permits light use only.
+  - **Why the 403 "Access blocked" tiles happened:** the app sent `Referrer-Policy: same-origin` everywhere,
+    so browsers sent no `Referer` to the tile server, which OpenStreetMap's policy forbids. Public pages now
+    send the browser default (`strict-origin-when-cross-origin`: origin only, never the path). Staff pages
+    keep `same-origin`.
+
+  Pins and verified-location rules are the same for every provider. When no location is verified, the map
+  opens on Haldwani's city centre (from OpenStreetMap Nominatim, way 112883732) for orientation only.
+
+#### Under verification (added 17 Nov 2026)
+A real facility that is **named in an official source** (identity source-confirmed or facility-confirmed, not
+disputed, outdated or closed) but **not yet listable** appears in an *Under verification* section on `/find`,
+and `/find/<slug>` shows a minimal page for it. These pages show only the name, aliases, district and state, and
+public source links. They **never** show phone numbers, addresses, coordinates, a map pin or availability, even
+if such data is stored, and these facilities are excluded from `/api/public/facilities` and the map data.
+Once a facility meets every listing rule and is listed, it moves to the normal directory.
+
+#### Loading reviewed facility records
+`scripts/load_facilities.py` loads facility records from a reviewed JSON file through the same services as the
+platform-admin screens, so every provenance rule applies. It runs as a dry run by default. With `--apply`, it
+first makes a verified backup, then writes all-or-nothing, and skips facilities that already exist.
+
+```powershell
+python -m scripts.load_facilities data/haldwani_facilities.json --actor <platform-admin-username>          # dry run
+python -m scripts.load_facilities data/haldwani_facilities.json --actor <platform-admin-username> --apply
+```
+
+`data/haldwani_facilities.json` holds the four Nainital-district blood banks named in the NHM Uttarakhand
+*Blood Bank / Storage Center list* (`https://nhm.uk.gov.in/files/Blood_Bank__Storage_Center_list.pdf`):
+Sushila Tiwari Govt. Hosp., SSJ Base Haldwani, Haldwani City Blood Bank, and Lt. Sh. Bal Kishan Devki Joshi
+Charitable Blood Bank. For each one, identity is *source-confirmed* only; no direct contact was made. **No
+address, phone number, coordinates, ownership or stock is recorded.**
+
+Caveats to resolve before the data is relied on:
+- On 17 Nov 2026 the NHM URL returned HTTP 404. The entries were confirmed from project research and a search
+  engine's index of that document, which is undated.
+- The supporting NHM 2025–26 approval document for SSJ is a scanned PDF, and its text was not machine-checked.
+- Re-check every entry against e-RaktKosh before treating it as current.
 
 ### Phase 3: multi-facility data isolation
 Each blood bank works in its own **facility**. Every donor, donation, bag, request, issue and staff account
@@ -463,13 +509,68 @@ belongs to exactly one facility.
 ## 10. Time zones
 | Data | Stored as | Shown as |
 |---|---|---|
-| Timestamps: issue time, request created/approved/rejected, screening time | naive **UTC** | labelled "UTC" |
-| Calendar dates: donation, collection, expiry, required-by, "today" | server **local date** | plain date |
+| Timestamps: issue time, request created/approved/rejected, screening time, publication times | **UTC** | **IST**, e.g. `05 Nov 2026, 23:59 IST` |
+| Calendar dates: donation, collection, expiry, required-by, "today" | plain date | plain date |
 
-The Issue History filter and the Issues and Requests reports compare their From/To dates with the
-UTC timestamps, so the inputs are labelled "UTC date". **IST = UTC + 5:30**, so a bag issued between
-00:00 and 05:29 IST appears under the previous UTC date. The Donation report filters on the local
-donation date.
+- **Stored instants are UTC.** In Python they are timezone-aware UTC (`app/db_types.py`, `UTCDateTime`).
+  SQLite keeps the same text format as before (naive UTC in a `DATETIME` column), so existing rows and
+  the schema are unchanged; existing naive values are read as UTC and never shifted twice.
+- **Business days are Asia/Kolkata (IST) calendar days** (`BBMS_TIMEZONE`), whatever the server's own
+  time zone. "Today" changes at 00:00 IST (18:30 UTC). A bag expiring on 5 Nov stays usable until
+  23:59:59 IST on 5 Nov.
+- **Date filters** (Issue History, Issues and Requests reports) select whole IST days: From 00:00 IST
+  inclusive up to the day after To at 00:00 IST, exclusive. The inputs are labelled "IST date". The
+  Donation report filters on the donation date itself.
+- **The public JSON API** returns UTC instants in ISO 8601 with a single `Z` suffix
+  (e.g. `2026-11-05T18:29:00Z`).
+
+## 10a. Public demonstration on Render Free (₹0)
+
+`render.yaml` describes one **free** web service: no disk, no database service and no paid add-ons.
+
+| Setting | Value |
+|---|---|
+| Build command | `pip install -r requirements.txt` |
+| Start command | `python -m scripts.build_demo_db && uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --workers 1` |
+| Health check | `/healthz` (returns `{"status":"ok"}` after a database query; no data) |
+
+Environment variables:
+
+| Variable | Value |
+|---|---|
+| `PYTHON_VERSION` | `3.13.3` |
+| `APP_ENV` | `production` (enforces a strong secret key and Secure session cookies) |
+| `BBMS_SECRET_KEY` | generated by Render (or `python -c "import secrets; print(secrets.token_urlsafe(48))"`) |
+| `BBMS_DEMO_MODE` | `true` |
+| `BBMS_DATABASE_URL` | `sqlite:////tmp/bbms-demo.db` |
+| `FORWARDED_ALLOW_IPS` | `*` (trust Render's proxy for `X-Forwarded-Proto`, so the app sees HTTPS) |
+| `BBMS_DEMO_PASSWORD_ADMIN`, `_DOCTOR`, `_STAFF`, `_PLATFORM` | entered in the Render dashboard only. At least 12 characters, letters and digits, and never the local README passwords |
+
+**Database strategy.** `scripts/build_demo_db.py` runs on every start and rebuilds `/tmp/bbms-demo.db` from
+scratch:
+- synthetic operational data for the fictional *Demo Blood Centre*, from the seed scenario;
+- the four Haldwani facility records from `data/haldwani_facilities.json`, with their sources and
+  verification states;
+- the accounts `demo.admin`, `demo.doctor`, `demo.staff` and `demo.platform`.
+
+The local `bloodbank.db` and `backups/` are git-ignored and never deployed.
+
+The builder refuses to run in any of these cases:
+- `BBMS_DEMO_MODE` is not true;
+- the database file is named `bloodbank.db`, or lies inside the project folder;
+- a password is missing, weak or reused;
+- the existing file lacks the demo marker, or contains accounts other than the four demo accounts.
+
+**What visitors should know** (a banner on every page says this):
+- The data is synthetic.
+- Changes are erased whenever the free service restarts or wakes from sleep, which happens after about
+  15 minutes without traffic. The first request after sleep can take a minute.
+
+**Disabled in demo mode,** because all visitors share the same accounts:
+- account creation, activation and password changes;
+- every change to the facility directory (`/platform`), which lists real blood banks.
+
+Donor, donation, screening, inventory, request and issue workflows stay enabled.
 
 ## 11. Known limitations and next steps
 - Only one product (whole blood). Component separation (PRBC, FFP, platelets), each with its own
@@ -505,9 +606,10 @@ These were found in the Phase 4 security review and are **not yet resolved**:
 - **HTTPS is required in production.** Cookies are `Secure`, so TLS must terminate in front of the app.
   Behind a proxy, run uvicorn with `--proxy-headers --forwarded-allow-ips=<proxy address>` so client
   addresses and the HTTPS scheme are correct.
-- **Clock and time zone.** Expiry dates and publication validity rely on the server's local date and on
-  naive UTC timestamps, so the server clock and time zone must be correct.
+- **Clock.** Expiry dates and publication validity use the server's UTC clock (converted to IST for
+  business days), so the clock must be correct. The server's own time zone setting no longer matters.
 - **SQLite** handles one writer at a time. Several app workers queue their writes, which is fine for a few
   facilities but is not tested under load.
-- **Third-party services.** The pages depend on the jsdelivr and cdnjs CDNs and on OpenStreetMap's tile
-  servers, which are for light use. Switch provider (`BBMS_MAP_TILE_URL`) if traffic grows.
+- **Third-party services.** The pages depend on the jsdelivr and cdnjs CDNs, and on OpenFreeMap (or the
+  configured raster tile server). OpenFreeMap's public instance has no SLA. Self-host the tiles or use a
+  commercial provider for production.

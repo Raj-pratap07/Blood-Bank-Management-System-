@@ -1,4 +1,4 @@
-// Haldwani BloodLink public map + "near me" sorting.
+// Public map + "near me" sorting.
 // - Pins only for facilities the server marked as location-verified (lat/lon present).
 // - All text is inserted with textContent (no HTML injection from data).
 // - The visitor's location never leaves the browser: no request is made with it.
@@ -37,6 +37,28 @@
     return box;
   }
 
+  function webglAvailable() {
+    try {
+      const c = document.createElement("canvas");
+      return !!(window.WebGLRenderingContext && (c.getContext("webgl2") || c.getContext("webgl")));
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Base map: OpenFreeMap vector tiles (MapLibre GL inside Leaflet) when configured and supported,
+  // otherwise the configured raster XYZ tiles. Markers and verified-location rules are identical either way.
+  function addBaseLayer(m) {
+    const d = mapEl.dataset;
+    if (d.provider === "openfreemap" && typeof L.maplibreGL === "function" && webglAvailable()) {
+      L.maplibreGL({ style: d.styleUrl, attribution: d.styleAttribution }).addTo(m);
+      mapEl.dataset.baseLayer = "openfreemap";
+      return;
+    }
+    L.tileLayer(d.tileUrl, { maxZoom: 19, attribution: d.attribution }).addTo(m);
+    mapEl.dataset.baseLayer = "raster";
+  }
+
   function initMap() {
     if (!mapEl) return;
     if (typeof L === "undefined") {
@@ -45,7 +67,7 @@
     }
     const center = JSON.parse(mapEl.dataset.center);
     map = L.map(mapEl, { scrollWheelZoom: !mapEl.dataset.single }).setView(center, Number(mapEl.dataset.zoom));
-    L.tileLayer(mapEl.dataset.tileUrl, { maxZoom: 19, attribution: mapEl.dataset.attribution }).addTo(map);
+    addBaseLayer(map);
 
     const icon = L.divIcon({ className: "", html: '<div class="pub-pin"><i class="bi bi-droplet-fill"></i></div>',
       iconSize: [30, 30], iconAnchor: [15, 30], popupAnchor: [0, -28] });

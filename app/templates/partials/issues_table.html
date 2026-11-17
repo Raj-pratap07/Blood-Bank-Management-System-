@@ -4,11 +4,11 @@
 <div class="card">
   <div class="table-responsive">
     <table class="table table-hover table-sm mb-0">
-      <thead><tr><th class="ps-3">Issued at (UTC)</th><th>Bag ID</th><th>Group</th><th>Request</th><th>Patient group</th><th>Hospital</th><th>Issued by</th><th>Received by</th><th class="pe-3">Crossmatch</th></tr></thead>
+      <thead><tr><th class="ps-3">Issued at (IST)</th><th>Bag ID</th><th>Group</th><th>Request</th><th>Patient group</th><th>Hospital</th><th>Issued by</th><th>Received by</th><th class="pe-3">Crossmatch</th></tr></thead>
       <tbody>
       {% for i in items %}
         <tr>
-          <td class="ps-3">{{ i.issued_at.strftime('%d %b %Y %H:%M') }}</td>
+          <td class="ps-3">{{ i.issued_at | dt }}</td>
           <td class="font-monospace"><a href="/inventory/units/{{ i.blood_unit_id }}">{{ i.blood_unit.unit_code }}</a></td>
           <td>{{ m.group(i.blood_unit.blood_group) }}</td>
           <td><a href="/requests/{{ i.request_id }}">{{ i.request.code }}</a></td>

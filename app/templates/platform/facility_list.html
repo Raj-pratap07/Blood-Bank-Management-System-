@@ -2,7 +2,7 @@
 {% import "partials/macros.html" as m with context %}
 {% block title %}Facility directory{% endblock %}
 {% block content %}
-{% call m.page_header("Facility directory", "Haldwani BloodLink · platform administration") %}
+{% call m.page_header("Facility directory", settings.app_name ~ " · platform administration") %}
   <a class="btn btn-bb" href="/platform/facilities/new"><i class="bi bi-plus-lg"></i> Add facility</a>
 {% endcall %}
 

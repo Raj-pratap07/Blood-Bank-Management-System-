@@ -12,6 +12,7 @@ from app.services.compatibility import compatible_donor_groups
 from app.services.errors import InventoryError, PermissionDenied
 from app.services.scope import ensure_owned
 from app.services.tx import transaction
+from app.utils import business_today
 
 EXPIRABLE = (UnitStatus.QUARANTINE, UnitStatus.AVAILABLE, UnitStatus.RESERVED)
 
@@ -22,7 +23,7 @@ def expire_overdue_units(db: Session, on: date | None = None) -> int:
     Deliberately platform-wide system maintenance: it applies one fixed rule, returns only a
     count, and exposes no data, so any request may trigger it.
     """
-    on = on or date.today()
+    on = on or business_today()
     with transaction(db):
         result = db.execute(
             update(BloodUnit)
@@ -35,7 +36,7 @@ def expire_overdue_units(db: Session, on: date | None = None) -> int:
 
 def stock_summary(db: Session, facility_id: int, on: date | None = None) -> list[dict]:
     """Per blood group (one facility): counts by status plus near-expiry available units."""
-    on = on or date.today()
+    on = on or business_today()
     near = on + timedelta(days=settings.near_expiry_days)
     rows = db.execute(
         select(BloodUnit.blood_group, BloodUnit.status, func.count())
@@ -61,7 +62,7 @@ def fefo_candidates(db: Session, facility_id: int, recipient: BloodGroup, on: da
     Order: identical group first (conserves O-negative and other scarce groups),
     then First-Expiry-First-Out within each tier.
     """
-    on = on or date.today()
+    on = on or business_today()
     stmt = (
         select(BloodUnit)
         .where(
@@ -78,7 +79,7 @@ def fefo_candidates(db: Session, facility_id: int, recipient: BloodGroup, on: da
 
 
 def available_count_by_group(db: Session, facility_id: int, on: date | None = None) -> dict[str, int]:
-    on = on or date.today()
+    on = on or business_today()
     rows = db.execute(
         select(BloodUnit.blood_group, func.count())
         .where(BloodUnit.facility_id == facility_id, BloodUnit.status == UnitStatus.AVAILABLE,

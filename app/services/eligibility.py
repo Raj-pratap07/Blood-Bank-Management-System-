@@ -15,6 +15,7 @@ from datetime import date, timedelta
 from app.config import settings
 from app.models.donor import Donor
 from app.models.enums import Gender
+from app.utils import business_today
 
 DISCLAIMER = (
     "Preliminary software check only, not a medical clearance. Final donor acceptance "
@@ -51,7 +52,7 @@ def interval_for(gender: Gender) -> int:
 
 
 def check_donor(donor: Donor, on: date | None = None, vitals: Vitals | None = None) -> EligibilityResult:
-    on = on or date.today()
+    on = on or business_today()
     s = settings
     reasons: list[str] = []
 

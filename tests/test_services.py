@@ -26,6 +26,7 @@ from app.services.compatibility import is_compatible
 from app.services.eligibility import Vitals, check_donor
 from app.services.errors import EligibilityError, InventoryError, PermissionDenied, ServiceError
 from app.services.inventory import expire_overdue_units, fefo_candidates, stock_summary
+from app.utils import business_today
 from tests.conftest import screening, vitals
 
 
@@ -51,7 +52,7 @@ class TestDonorRegistration:
 
     @pytest.mark.parametrize("field,value", [
         ("blood_group", "Z+"), ("phone", "abc"), ("weight_kg", 5), ("email", "not-an-email"),
-        ("date_of_birth", (date.today() + timedelta(days=1)).isoformat()),
+        ("date_of_birth", (business_today() + timedelta(days=1)).isoformat()),
     ])
     def test_invalid_input_rejected(self, field, value):
         data = dict(full_name="Valid Name", gender="male", date_of_birth="1990-01-01",
@@ -70,7 +71,7 @@ class TestEligibility:
         assert any("First-time" in x for x in r.reasons)
 
     def test_repeat_donor_over_60_eligible(self, make_donor):
-        donor = make_donor(age=62, last_external_donation_date=date.today() - timedelta(days=200))
+        donor = make_donor(age=62, last_external_donation_date=business_today() - timedelta(days=200))
         assert check_donor(donor).eligible
 
     def test_underage_and_underweight(self, make_donor):
@@ -78,7 +79,7 @@ class TestEligibility:
         assert len(r.reasons) == 2
 
     def test_interval_by_gender(self, make_donor):
-        last = date.today() - timedelta(days=100)
+        last = business_today() - timedelta(days=100)
         assert check_donor(make_donor(gender=Gender.MALE, last_external_donation_date=last)).eligible
         r = check_donor(make_donor(gender=Gender.FEMALE, last_external_donation_date=last))
         assert not r.eligible and r.next_eligible_date == last + timedelta(days=120)
@@ -92,14 +93,14 @@ class TestEligibility:
 
     def test_ineligible_donation_blocked(self, db, users, make_donor):
         donor = make_donor()
-        data = DonationIn(donor_id=donor.id, donation_date=date.today(), cleared_by_id=users["medical_officer"].id,
+        data = DonationIn(donor_id=donor.id, donation_date=business_today(), cleared_by_id=users["medical_officer"].id,
                           **vitals(hemoglobin_g_dl=10))
         with pytest.raises(EligibilityError):
             donation_svc.record_donation(db, donor, data, users["staff"])
 
     def test_clearance_requires_authorised_user(self, db, users, make_donor):
         donor = make_donor()
-        data = DonationIn(donor_id=donor.id, donation_date=date.today(), cleared_by_id=users["staff"].id, **vitals())
+        data = DonationIn(donor_id=donor.id, donation_date=business_today(), cleared_by_id=users["staff"].id, **vitals())
         with pytest.raises(ServiceError, match="medical officer"):
             donation_svc.record_donation(db, donor, data, users["staff"])
 
@@ -165,7 +166,7 @@ class TestExpiry:
         unit = make_unit(G.A_POS, days_ago=30)
         req = make_request(db, users, G.A_POS, 1)
         req_svc.approve_and_reserve(db, req, users["medical_officer"])
-        later = date.today() + timedelta(days=10)
+        later = business_today() + timedelta(days=10)
         with pytest.raises(InventoryError):
             req_svc.issue_units(db, req, IssueIn(unit_ids=[unit.id], received_by="Ward Nurse",
                                                  crossmatch_confirmed=True), users["staff"], on=later)

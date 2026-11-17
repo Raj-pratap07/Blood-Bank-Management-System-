@@ -14,12 +14,21 @@ from app.config import settings
 from app.database import get_db
 from app.models import TRACKED_PRODUCTS, AvailabilityStatus, BloodGroup, Product
 from app.services import public as pub
+from app.utils import iso_utc
 from app.web import templates
 
 router = APIRouter()
 
 NOTICE = ("Availability is reported by the blood bank itself and can change at any time. It is not a reservation "
           "and does not guarantee that blood can be issued. Always call the blood bank to confirm before travelling.")
+
+
+# Absence of data here is never evidence that blood is unavailable in Haldwani.
+NO_STOCK_MESSAGE = ("No participating blood bank has published current stock on this site, so this search cannot "
+                    "be answered here. This does not mean blood is unavailable. Check the official e-RaktKosh "
+                    "portal or call a blood bank.")
+NO_MATCH_MESSAGE = ("No participating blood bank currently reports this as available. That does not mean none is "
+                    "available: other blood banks do not publish here. Check e-RaktKosh or call a blood bank.")
 
 
 # Pages/API carrying listing or availability data must never be served from a browser cache:
@@ -29,11 +38,17 @@ NO_CACHE = "no-cache, max-age=0, must-revalidate"
 
 def _render(request: Request, name: str, ctx: dict, status_code: int = 200, cache: str = NO_CACHE):
     base = {"public_nav": True, "notice": NOTICE, "map": {
+        "provider": settings.map_provider, "style_url": settings.map_style_url,
+        "style_attribution": settings.map_style_attribution,
         "tile_url": settings.map_tile_url, "attribution": settings.map_attribution,
         "center": list(settings.map_default_center), "zoom": settings.map_default_zoom}}
     base.update(ctx)
     resp = templates.TemplateResponse(request, name, base, status_code=status_code)
     resp.headers["Cache-Control"] = cache
+    # Tile servers (OpenStreetMap's policy explicitly) require a Referer. The app-wide "same-origin" policy
+    # stripped it and OSM answered with "Access blocked" tiles. Public pages carry nothing sensitive in their
+    # URLs, so they use the browser default: only the origin is sent cross-site, never the path or query.
+    resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     return resp
 
 
@@ -42,7 +57,7 @@ def landing(request: Request, db: Session):
     published = sum(1 for f in facilities if pub.availability(db, f).is_current)
     return _render(request, "public/landing.html", {
         "count": len(facilities), "mapped": sum(1 for f in facilities if f.location_verified),
-        "published": published})
+        "published": published, "candidates": len(pub.candidate_facilities(db))})
 
 
 def _filters(group: str, component: str, facility: str, facilities):
@@ -52,6 +67,10 @@ def _filters(group: str, component: str, facility: str, facilities):
     sel_facility = facility if facility in slugs else None
     invalid = bool((group and not sel_group) or (component and not sel_product) or (facility and not sel_facility))
     return sel_group, sel_product, sel_facility, invalid
+
+
+def pub_views_all(db: Session, facilities):
+    return (pub.availability(db, f) for f in facilities)
 
 
 @router.get("/find")
@@ -78,6 +97,9 @@ def directory(request: Request, group: str = "", component: str = "", facility: 
         "results": results, "group": sel_group, "component": sel_product, "facility_filter": sel_facility,
         "tracked": TRACKED_PRODUCTS, "groups": [g.value for g in BloodGroup], "components": list(Product),
         "invalid_filter": invalid, "map_data": [f.to_json() for f in shown],
+        "candidates": [] if sel_facility else pub.candidate_facilities(db),
+        "any_current": any(v.is_current for v in pub_views_all(db, facilities)),
+        "no_stock_message": NO_STOCK_MESSAGE,
         "eraktkosh_url": pub.ERAKTKOSH_URL,
     })
 
@@ -92,6 +114,9 @@ def about_data(request: Request):
 def facility_page(request: Request, slug: str, db: Session = Depends(get_db)):
     f = pub.public_facility(db, slug)
     if f is None:
+        c = pub.candidate_facility(db, slug)
+        if c is not None:                                # named in an official source, not yet verified
+            return _render(request, "public/candidate.html", {"c": c, "eraktkosh_url": pub.ERAKTKOSH_URL})
         raise HTTPException(status_code=404, detail="This blood bank is not listed in the public directory.")
     return _render(request, "public/facility.html", {
         "f": f, "availability": pub.availability(db, f), "eraktkosh_url": pub.ERAKTKOSH_URL,
@@ -108,7 +133,7 @@ def facilities_geojson(response: Response, db: Session = Depends(get_db)):
         props = f.to_json()
         lat, lon = props.pop("lat"), props.pop("lon")
         v = pub.availability(db, f)
-        props["availability_published_at"] = v.published_at.isoformat() + "Z" if v.is_current else None
+        props["availability_published_at"] = iso_utc(v.published_at) if v.is_current else None
         features.append({
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [lon, lat]} if f.location_verified else None,
@@ -116,7 +141,7 @@ def facilities_geojson(response: Response, db: Session = Depends(get_db)):
         })
     response.headers["Cache-Control"] = NO_CACHE
     return {"type": "FeatureCollection", "features": features,
-            "attribution": "Directory data: Haldwani BloodLink (sources listed per facility)."}
+            "attribution": f"Directory data: {settings.app_name} (sources listed per facility)."}
 
 
 @router.get("/api/public/availability")
@@ -130,12 +155,14 @@ def availability_api(response: Response, group: str = "", component: str = "", f
                              "groups": [g.value for g in BloodGroup], "components": [p.value for p in Product]},
                             status_code=422)
     out = []
+    reporting = 0
     for f in facilities:
         if sel_facility and f.slug != sel_facility:
             continue
         v = pub.availability(db, f)
         if not v.is_current:
             continue
+        reporting += 1
         for c in v.cells:
             if c.status is None:
                 continue
@@ -143,9 +170,15 @@ def availability_api(response: Response, group: str = "", component: str = "", f
                 continue
             item = {"facility": f.slug, "facility_name": f.name, "blood_group": c.blood_group,
                     "component": c.product, "status": c.status.value,
-                    "published_at": v.published_at.isoformat() + "Z", "valid_until": v.valid_until.isoformat() + "Z"}
+                    "published_at": iso_utc(v.published_at), "valid_until": iso_utc(v.valid_until)}
             if c.units is not None:
                 item["units"] = c.units
             out.append(item)
     response.headers["Cache-Control"] = NO_CACHE
-    return {"results": out, "notice": NOTICE}
+    body = {"results": out, "notice": NOTICE, "facilities_reporting": reporting,
+            "official_portal": pub.ERAKTKOSH_URL}
+    if reporting == 0:
+        body["message"] = NO_STOCK_MESSAGE
+    elif not out:
+        body["message"] = NO_MATCH_MESSAGE
+    return body

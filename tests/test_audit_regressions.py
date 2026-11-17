@@ -15,6 +15,7 @@ from app.services.eligibility import check_donor
 from app.services.errors import EligibilityError, InventoryError, ServiceError
 from app.services.inventory import discard_unit
 from app.services.reports import dashboard_counts
+from app.utils import business_today
 from tests.conftest import csrf_from, login, screening, vitals
 
 
@@ -33,7 +34,7 @@ def _post(client, url, data, page="/"):
 class TestBackdatedDonationInterval:
     def test_backdated_donation_within_interval_of_later_one_is_blocked(self, db, users, make_donor):
         donor = make_donor(gender=Gender.MALE)
-        recent = date.today() - timedelta(days=5)
+        recent = business_today() - timedelta(days=5)
         donation_svc.record_donation(db, donor, DonationIn(
             donor_id=donor.id, donation_date=recent, cleared_by_id=users["medical_officer"].id, **vitals()),
             users["staff"])
@@ -46,7 +47,7 @@ class TestBackdatedDonationInterval:
 
     def test_backdated_donation_outside_interval_still_allowed(self, db, users, make_donor):
         donor = make_donor(gender=Gender.MALE)
-        recent = date.today() - timedelta(days=5)
+        recent = business_today() - timedelta(days=5)
         donation_svc.record_donation(db, donor, DonationIn(
             donor_id=donor.id, donation_date=recent, cleared_by_id=users["medical_officer"].id, **vitals()),
             users["staff"])

@@ -9,6 +9,8 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -21,7 +23,7 @@ from app.config import (
     settings,
     validate_settings,
 )
-from app.database import init_db
+from app.database import get_db, init_db
 from app.routers import (
     api,
     auth,
@@ -39,10 +41,12 @@ from app.routers import (
 )
 from app.web import (
     CSRFError,
+    DemoReadOnly,
     Forbidden,
     NotAuthenticated,
     PasswordChangeRequired,
     csrf_protect,
+    demo_guard,
     flash,
     redirect,
     render,
@@ -68,7 +72,7 @@ def create_app(init: bool = True) -> FastAPI:
             init_db()
         yield
 
-    app = FastAPI(title=settings.app_name, lifespan=lifespan, dependencies=[Depends(csrf_protect)],
+    app = FastAPI(title=settings.app_name, lifespan=lifespan, dependencies=[Depends(demo_guard), Depends(csrf_protect)],
                   docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(
         SessionMiddleware, secret_key=settings.secret_key, session_cookie="bbms_session",
@@ -78,6 +82,15 @@ def create_app(init: bool = True) -> FastAPI:
 
     for r in (auth, dashboard, public, donors, donations, inventory, requests, issues, reports, users, api, platform, availability):
         app.include_router(r.router)
+
+    @app.get("/healthz", include_in_schema=False)
+    def healthz(db: Session = Depends(get_db)):
+        """Liveness + database check for the hosting platform. Reveals no data."""
+        try:
+            db.execute(text("SELECT 1"))
+        except Exception:  # noqa: BLE001 - any database failure means unhealthy
+            return JSONResponse({"status": "error"}, status_code=503, headers={"Cache-Control": "no-store"})
+        return JSONResponse({"status": "ok"}, headers={"Cache-Control": "no-store"})
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
@@ -108,6 +121,16 @@ def create_app(init: bool = True) -> FastAPI:
         return render(request, "errors/error.html", {
             "code": 403, "title": "Access denied",
             "message": "Your role does not permit this action."}, status_code=403)
+
+    @app.exception_handler(DemoReadOnly)
+    async def _demo_read_only(request: Request, _exc):
+        if request.url.path.startswith("/api/"):
+            return JSONResponse({"detail": "Disabled in the public demo"}, status_code=403)
+        return render(request, "errors/error.html", {
+            "code": 403, "title": "Disabled in the public demo",
+            "message": "Account, password and facility-directory changes are disabled in this public demonstration, "
+                       "because all visitors share the demo accounts and the directory lists real blood banks. "
+                       "Donor, donation, inventory, request and issue workflows remain available."}, status_code=403)
 
     @app.exception_handler(CSRFError)
     async def _csrf(request: Request, _exc):

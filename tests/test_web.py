@@ -7,6 +7,7 @@ import pytest
 from sqlalchemy import select
 
 from app.models import BloodRequest, BloodUnit, Donation, Donor, RequestStatus, UnitStatus
+from app.utils import business_today
 from tests.conftest import csrf_from, login
 
 
@@ -124,7 +125,7 @@ class TestWorkflow:
 
         # 2. Staff records a donation, cleared by the medical officer -> quarantine.
         r = post(client, "/donations/new", {
-            "donor_id": donor.id, "donation_date": date.today().isoformat(), "volume_ml": "450",
+            "donor_id": donor.id, "donation_date": business_today().isoformat(), "volume_ml": "450",
             "weight_kg": "70", "hemoglobin_g_dl": "14.2", "bp_systolic": "122", "bp_diastolic": "78",
             "pulse_bpm": "74", "temperature_c": "36.7", "questionnaire_ok": "true",
             "cleared_by_id": users["medical_officer"].id}, page=f"/donations/new?donor_id={donor.id}")
@@ -134,7 +135,7 @@ class TestWorkflow:
 
         # 3. Immediate repeat donation is blocked by the interval rule.
         r = post(client, "/donations/new", {
-            "donor_id": donor.id, "donation_date": date.today().isoformat(), "volume_ml": "350",
+            "donor_id": donor.id, "donation_date": business_today().isoformat(), "volume_ml": "350",
             "weight_kg": "70", "hemoglobin_g_dl": "14.2", "bp_systolic": "122", "bp_diastolic": "78",
             "pulse_bpm": "74", "temperature_c": "36.7", "questionnaire_ok": "true",
             "cleared_by_id": users["medical_officer"].id})

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import math
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from fastapi import Depends, Request
@@ -17,6 +17,7 @@ from app.database import get_db
 from app.models import FACILITY_ROLES, BloodGroup, Role, User
 from app.services import compatibility, eligibility
 from app.services.security import CSRF_FORM_FIELD, csrf_token_valid, get_csrf_token
+from app.utils import business_today, to_business
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
 
@@ -32,6 +33,22 @@ class Forbidden(Exception):
 
 class CSRFError(Exception):
     pass
+
+
+class DemoReadOnly(Exception):
+    """A change that is disabled in the public demonstration (settings.demo_mode)."""
+
+
+# In the public demo every visitor shares the same accounts, so these changes could lock others out
+# (passwords, account status, new accounts) or publish false details about REAL blood banks
+# (anything under /platform). Operational demo workflows (donors, donations, requests, ...) stay enabled.
+DEMO_BLOCKED_PREFIXES = ("/users", "/platform", "/account/password", "/account/setup")
+
+
+async def demo_guard(request: Request) -> None:
+    if (settings.demo_mode and request.method not in ("GET", "HEAD", "OPTIONS")
+            and request.url.path.startswith(DEMO_BLOCKED_PREFIXES)):
+        raise DemoReadOnly()
 
 
 class PasswordChangeRequired(Exception):
@@ -59,7 +76,17 @@ def _label(value: Any) -> str:
 
 
 def _fmt_date(value: Any, fmt: str = "%d %b %Y") -> str:
-    return value.strftime(fmt) if value else "—"
+    """Dates as-is; timestamps (stored UTC) shown on their business-time-zone (IST) calendar day."""
+    if not value:
+        return "—"
+    if isinstance(value, datetime):
+        value = to_business(value)
+    return value.strftime(fmt)
+
+
+def _fmt_dt(value: Any, fmt: str = "%d %b %Y, %H:%M %Z") -> str:
+    """A stored UTC timestamp shown in the business time zone, e.g. '05 Nov 2026, 23:59 IST'."""
+    return to_business(value).strftime(fmt) if value else "—"
 
 
 templates.env.globals.update(
@@ -67,19 +94,17 @@ templates.env.globals.update(
     BLOOD_GROUPS=[g.value for g in BloodGroup],
     csrf_token=lambda request: get_csrf_token(request.session),
     pop_flashes=pop_flashes,
-    today=date.today,
+    today=business_today,
     COMPAT_DISCLAIMER=compatibility.DISCLAIMER,
     ELIGIBILITY_DISCLAIMER=eligibility.DISCLAIMER,
     Role=Role,
 )
 def _fmt_ist(value: Any) -> str:
-    """Stored timestamps are naive UTC; the public reads Indian Standard Time (UTC+5:30)."""
-    from datetime import timedelta
-
-    return (value + timedelta(hours=5, minutes=30)).strftime("%d %b %Y, %H:%M IST") if value else "—"
+    """Kept for existing templates: same as `dt` (business time zone, IST by default)."""
+    return _fmt_dt(value)
 
 
-templates.env.filters.update(label=_label, d=_fmt_date, ist=_fmt_ist)
+templates.env.filters.update(label=_label, d=_fmt_date, dt=_fmt_dt, ist=_fmt_ist)
 
 
 def render(request: Request, name: str, context: dict | None = None, status_code: int = 200):

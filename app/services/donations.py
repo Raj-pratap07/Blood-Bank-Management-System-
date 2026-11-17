@@ -12,7 +12,7 @@ from app.services.eligibility import Vitals, check_donor
 from app.services.errors import EligibilityError, PermissionDenied, ServiceError
 from app.services.scope import ensure_owned, facility_id_of
 from app.services.tx import transaction
-from app.utils import utcnow
+from app.utils import utcnow, business_today
 
 
 def unit_code_for(donation: Donation) -> str:
@@ -68,7 +68,7 @@ def screen_donation(db: Session, donation: Donation, data: ScreeningIn, actor: U
     ensure_owned(donation, actor, "Donation")
     if donation.status != DonationStatus.QUARANTINE:
         raise ServiceError("Screening has already been completed for this donation.")
-    on = on or date.today()
+    on = on or business_today()
 
     with transaction(db):
         for field in ("hiv_result", "hbv_result", "hcv_result", "syphilis_result", "malaria_result",

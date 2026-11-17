@@ -22,11 +22,11 @@
       <dt class="col-5">Requester</dt><dd class="col-7">{{ req.requester_name }} · {{ req.requester_phone }}</dd>
       {% if req.approved_by %}
       <dt class="col-5">Approved by</dt>
-      <dd class="col-7">{{ req.approved_by.full_name }} · {{ req.approved_at.strftime('%d %b %Y %H:%M') }} UTC</dd>
+      <dd class="col-7">{{ req.approved_by.full_name }} · {{ req.approved_at | dt }}</dd>
       {% endif %}
       {% if req.rejected_by %}
       <dt class="col-5">Rejected by</dt>
-      <dd class="col-7">{{ req.rejected_by.full_name }} · {{ req.rejected_at.strftime('%d %b %Y %H:%M') }} UTC</dd>
+      <dd class="col-7">{{ req.rejected_by.full_name }} · {{ req.rejected_at | dt }}</dd>
       {% endif %}
       {% if req.decision_note %}<dt class="col-5">Note</dt><dd class="col-7">{{ req.decision_note }}</dd>{% endif %}
     </dl></div></div>
@@ -113,10 +113,10 @@
     <div class="card mb-3">
       <div class="card-header">Issue history</div>
       <div class="table-responsive"><table class="table table-sm mb-0">
-        <thead><tr><th class="ps-3">Issued at (UTC)</th><th>Bag ID</th><th>Group</th><th>Issued by</th><th class="pe-3">Received by</th></tr></thead>
+        <thead><tr><th class="ps-3">Issued at (IST)</th><th>Bag ID</th><th>Group</th><th>Issued by</th><th class="pe-3">Received by</th></tr></thead>
         <tbody>
         {% for i in req.issues %}
-          <tr><td class="ps-3">{{ i.issued_at.strftime('%d %b %Y %H:%M') }}</td><td class="font-monospace">{{ i.blood_unit.unit_code }}</td>
+          <tr><td class="ps-3">{{ i.issued_at | dt }}</td><td class="font-monospace">{{ i.blood_unit.unit_code }}</td>
               <td>{{ m.group(i.blood_unit.blood_group) }}</td><td>{{ i.issued_by.full_name }}</td><td class="pe-3">{{ i.received_by }}</td></tr>
         {% else %}{{ m.empty(5, "Nothing issued yet.") }}{% endfor %}
         </tbody>

@@ -37,6 +37,7 @@ from app.services import requests as req_svc
 from app.services import users as user_svc
 from app.services.errors import ServiceError
 from app.services.inventory import expire_overdue_units
+from app.utils import business_today, business_tz
 
 DEMO_USERS = [
     ("admin", "System Administrator", Role.ADMIN, "Admin@12345"),
@@ -69,11 +70,15 @@ GROUP_WEIGHTS = {G.O_POS: 30, G.B_POS: 30, G.A_POS: 21, G.AB_POS: 8, G.O_NEG: 3,
 
 
 def at(d: date, hour: int = 10) -> datetime:
-    return datetime.combine(d, time(hour, random.randint(0, 59)))
+    """A working-hours instant on business day `d` (IST), stored as UTC."""
+    return datetime.combine(d, time(hour, random.randint(0, 59)), tzinfo=business_tz())
 
 
 class Seeder:
-    def __init__(self, db, today: date):
+    def __init__(self, db, today: date, accounts=None):
+        """accounts: (username, full name, role, password) tuples; the first must be the facility admin.
+        Defaults to the documented local DEMO_USERS. The public deployment passes its own accounts."""
+        self.accounts = list(accounts or DEMO_USERS)
         self.db = db
         self.today = today
         self.rnd = random.Random(42)
@@ -177,7 +182,7 @@ class Seeder:
     def run(self) -> None:
         r = self.rnd
         admin = None
-        for username, name, role, pw in DEMO_USERS:
+        for username, name, role, pw in self.accounts:
             if admin is None:  # bootstrap the first admin directly
                 from app.services.security import hash_password
                 from app.models import Facility
@@ -195,6 +200,12 @@ class Seeder:
                 u.must_change_password = False   # demo accounts use the documented demo passwords
                 self.db.commit()
                 self.users[username] = u
+        # The scenario below acts as "staff" and "dr.mehta"; map those roles to whichever accounts were created.
+        first = {}
+        for username, _, role, _ in self.accounts:
+            first.setdefault(role, self.users[username])
+        self.users.setdefault("staff", first[Role.STAFF])
+        self.users.setdefault("dr.mehta", first[Role.MEDICAL_OFFICER])
 
         groups = list(GROUP_WEIGHTS)
         weights = list(GROUP_WEIGHTS.values())
@@ -400,7 +411,7 @@ def main(argv: list[str] | None = None) -> int:
         if db.scalar(select(func.count()).select_from(User)):
             print("Database already contains data. Re-run with --reset to wipe and re-seed.")
             return 1
-        Seeder(db, date.today()).run()
+        Seeder(db, business_today()).run()
         counts = {m.__name__: db.scalar(select(func.count()).select_from(m))
                   for m in (User, Donor, Donation, BloodRequest, Issue)}
     _mark_as_demo(engine)

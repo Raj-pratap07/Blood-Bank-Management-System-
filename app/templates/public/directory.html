@@ -9,8 +9,13 @@
     <div class="col-lg-5 col-xl-4 pub-dir-list order-2 order-lg-1">
       <div class="p-3 p-lg-4">
         <h1 class="h4 mb-1">Blood banks in Haldwani</h1>
-        <p class="text-muted small mb-3">{{ facilities | length }} verified listing{{ '' if facilities|length == 1 else 's' }} ·
-          <a href="/find/about-data">how we verify</a></p>
+        <ul class="pub-counts list-unstyled small mb-3">
+          <li><strong>{{ facilities | length }}</strong> with verified contact details
+            {% if facilities %}(listed below){% endif %}</li>
+          {% if candidates %}<li><strong>{{ candidates | length }}</strong> named in an official government source,
+            <a href="#under-verification">under verification</a></li>{% endif %}
+          <li><a href="/find/about-data">How we verify</a></li>
+        </ul>
 
         <form class="pub-filter" method="get" action="/find" aria-label="Availability filter">
           <div class="row g-2 align-items-end">
@@ -42,6 +47,16 @@
           </div>
         </form>
 
+        {% if not any_current and not filtering %}
+        <div class="pub-stock-status mt-3" role="note">
+          <div class="fw-semibold small mb-1"><i class="bi bi-info-circle"></i> Blood availability</div>
+          <p class="small mb-2">No participating blood bank has published current stock on this site yet. This does
+            <strong>not</strong> mean blood is unavailable in Haldwani.</p>
+          <a class="btn btn-sm btn-bb" href="{{ eraktkosh_url }}" target="_blank" rel="noopener">
+            <i class="bi bi-box-arrow-up-right"></i> Check stock on e-RaktKosh (official)</a>
+        </div>
+        {% endif %}
+
         {% if invalid_filter %}
         <div class="alert alert-warning small py-2 mt-3">That filter value isn't recognised, so it was ignored.</div>
         {% endif %}
@@ -51,7 +66,7 @@
           <div class="fw-semibold mb-1"><i class="bi bi-clipboard2-pulse"></i>
             {{ group.value if group else 'Any group' }} · {{ component.label if component else 'any component' }}</div>
           {% if component and component not in tracked %}
-          <p class="small mb-2">Blood banks on Haldwani BloodLink currently publish <strong>whole blood</strong> only.
+          <p class="small mb-2">Blood banks on this site currently publish <strong>whole blood</strong> only.
             {{ component.label }} isn't tracked here. Please call the blood banks below, or check
             <a href="{{ eraktkosh_url }}" target="_blank" rel="noopener">e-RaktKosh</a>.</p>
           {% elif results %}
@@ -64,20 +79,28 @@
             {% endfor %}
           </ul>
           <p class="small text-muted mb-0"><i class="bi bi-exclamation-triangle"></i> {{ notice }}</p>
+          {% elif not any_current %}
+          <p class="small mb-2">{{ no_stock_message }}</p>
+          <a class="btn btn-sm btn-bb mb-2" href="{{ eraktkosh_url }}" target="_blank" rel="noopener">
+            <i class="bi bi-box-arrow-up-right"></i> Check stock on e-RaktKosh (official)</a>
           {% else %}
-          <p class="small mb-2">No blood bank currently reports this as available on Haldwani BloodLink. That does not
-            mean none is available. <strong>Please call the blood banks below</strong>, or check the official
+          <p class="small mb-2">No participating blood bank currently reports this as available. That does not
+            mean none is available: other blood banks do not publish here. Call a blood bank, or check the official
             <a href="{{ eraktkosh_url }}" target="_blank" rel="noopener">e-RaktKosh</a> portal.</p>
+          {% endif %}
+          {% if not results and not (component and component not in tracked) %}
           <p class="small text-muted mb-0">Only current figures published by the blood banks themselves are shown. We never estimate stock.</p>
           {% endif %}
         </div>
         {% endif %}
 
+        {% if facilities %}
         <div class="pub-nearme mt-3" id="near-me">
           <button class="btn btn-sm btn-outline-secondary" type="button" id="near-me-btn" disabled>
             <i class="bi bi-crosshair"></i> Sort by distance from me</button>
           <div class="small text-muted mt-1" id="near-me-status">Your location stays in your browser; it is never sent to our server.</div>
         </div>
+        {% endif %}
 
         <div class="mt-3" id="facility-list">
         {% for f in facilities %}
@@ -98,6 +121,7 @@
             </div>
           </article>
         {% else %}
+          {% if not candidates %}
           <div class="pub-empty">
             <i class="bi bi-hourglass-split"></i>
             <h2 class="h6 mt-2">No blood banks are listed yet</h2>
@@ -105,8 +129,32 @@
               confirmed by the facility. Until then, use the official
               <a href="{{ eraktkosh_url }}" target="_blank" rel="noopener">e-RaktKosh</a> portal to find blood centres and stock.</p>
           </div>
+          {% endif %}
         {% endfor %}
         </div>
+
+        {% if candidates %}
+        <section class="mt-4" id="under-verification" aria-labelledby="uv-title">
+          <h2 class="h5 mb-1" id="uv-title"><i class="bi bi-hourglass-split"></i> Under verification
+            <span class="badge rounded-pill text-bg-secondary align-middle">{{ candidates | length }}</span></h2>
+          <p class="small mb-2">These blood banks are <strong>named in an official government source</strong>. We have
+            not yet verified their phone numbers, address, location or current operation, so none of these are shown
+            and they have <strong>no map pin</strong>. For contact details and stock, use
+            <a href="{{ eraktkosh_url }}" target="_blank" rel="noopener">e-RaktKosh</a>.</p>
+          {% for c in candidates %}
+          <article class="pub-card pub-card-candidate" data-slug="{{ c.slug }}">
+            <h3 class="h6 mb-1"><a href="/find/{{ c.slug }}">{{ c.name }}</a></h3>
+            {% if c.area %}<div class="small text-muted mb-1"><i class="bi bi-pin-map"></i> {{ c.area }} (district listing)</div>{% endif %}
+            {% if c.evidence %}<div class="small mb-1"><i class="bi bi-journal-text"></i> Source: {{ c.evidence[0].title }}</div>{% endif %}
+            <div class="d-flex flex-wrap gap-1">
+              <span class="pub-chip pub-chip-ok"><i class="bi bi-patch-check-fill"></i> {{ c.identity_text }}</span>
+              <span class="pub-chip pub-chip-warn"><i class="bi bi-exclamation-circle"></i> Contact &amp; location not yet verified</span>
+            </div>
+            <div class="mt-1"><a class="btn btn-sm btn-link ps-0" href="/find/{{ c.slug }}">Sources <i class="bi bi-chevron-right"></i></a></div>
+          </article>
+          {% endfor %}
+        </section>
+        {% endif %}
       </div>
     </div>
 
@@ -114,6 +162,7 @@
     <div class="col-lg-7 col-xl-8 order-1 order-lg-2">
       <div class="pub-map-wrap">
         <div id="map" class="pub-map" role="region" aria-label="Map of verified blood bank locations"
+             data-provider="{{ map.provider }}" data-style-url="{{ map.style_url }}" data-style-attribution="{{ map.style_attribution }}"
              data-tile-url="{{ map.tile_url }}" data-attribution="{{ map.attribution }}"
              data-center="{{ map.center | tojson }}" data-zoom="{{ map.zoom }}"></div>
         <div class="pub-map-legend small"><i class="bi bi-geo-alt-fill text-danger"></i> Pins show <strong>verified locations only</strong>.

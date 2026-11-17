@@ -1,4 +1,4 @@
-/* Haldwani BloodLink — public site */
+/* Blood Bank Management System — public site */
 :root {
   --pub-ink: #1d1b1a;
   --pub-ink-2: #52514e;
@@ -98,3 +98,18 @@ body.pub { background: var(--pub-bg); color: var(--pub-ink); }
 .pub-footer { background: #fff; border-top: 1px solid var(--pub-line); padding: 2.5rem 0; margin-top: 3rem; color: var(--pub-ink-2); }
 .pub-footer a { color: var(--pub-ink-2); }
 .pub-dir + .pub-footer, main:has(.pub-dir) + .pub-footer { margin-top: 0; }
+
+/* Branding: product name with subtitle */
+.pub-brand-text { display: inline-flex; flex-direction: column; line-height: 1.15; }
+.pub-brand-text strong { font-size: 1.02rem; }
+.pub-brand-sub { font-size: .72rem; color: var(--pub-muted-ink); font-weight: 400; white-space: normal; }
+
+/* Directory: counts, stock status and the under-verification list */
+.pub-counts li { margin-bottom: .15rem; }
+.pub-stock-status { background: var(--pub-warn-bg); color: var(--pub-warn-ink); border-radius: .75rem; padding: .85rem 1rem; }
+.pub-stock-status a:not(.btn) { color: inherit; text-decoration: underline; }
+.pub-card-candidate { border-left: 4px solid var(--pub-muted-ink); }
+
+/* Public demonstration banner (settings.demo_mode) */
+.demo-banner { background: #fff4dc; color: #5c3d00; border-bottom: 1px solid #f0d9a8; font-size: .85rem;
+  padding: .5rem 1rem; text-align: center; }

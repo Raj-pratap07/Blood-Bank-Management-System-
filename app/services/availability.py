@@ -36,16 +36,17 @@ from app.models import (
     UnitStatus,
     User,
 )
+from app.services import facilities as fsvc
 from app.services.errors import PermissionDenied, ServiceError
 from app.services.scope import facility_id_of
 from app.services.tx import transaction
-from app.utils import utcnow
+from app.utils import utcnow, business_today
 
 
 # ------------------------------------------------------------------ inventory side
 def eligible_counts(db: Session, facility_id: int, on: date | None = None) -> dict[tuple[BloodGroup, Product], int]:
     """Aggregate count of bags that may be offered: available AND unexpired. Never individual bags."""
-    on = on or date.today()
+    on = on or business_today()
     rows = db.execute(
         select(BloodUnit.blood_group, BloodUnit.product, func.count())
         .where(BloodUnit.facility_id == facility_id, BloodUnit.status == UnitStatus.AVAILABLE,
@@ -170,8 +171,13 @@ def _band(units: int) -> AvailabilityStatus:
 
 def public_view(db: Session, facility: Facility, now: datetime | None = None,
                 on: date | None = None) -> PublicAvailability:
-    """What an anonymous visitor may see for one facility. Callers must only pass publicly listed facilities."""
-    if (facility.is_demo or not facility.is_participating
+    """What an anonymous visitor may see for one facility.
+
+    Defence in depth: even if a caller passes an unlisted facility (or one whose listing is blocked, e.g.
+    unverified details), nothing is shown.
+    """
+    if (facility.is_demo or not facility.is_listed or fsvc.listing_blockers(facility, on)
+            or not facility.is_participating
             or facility.operational_status == OperationalStatus.CLOSED
             or facility.stock_visibility == StockVisibility.HIDDEN):
         return PublicAvailability("off")

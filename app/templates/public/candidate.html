@@ -1,0 +1,49 @@
+{% extends "public/base.html" %}
+{% block title %}{{ c.name }} (under verification){% endblock %}
+{% block description %}{{ c.name }}: named in an official source; contact details and location not yet verified.{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <nav aria-label="breadcrumb"><ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="/find">Blood banks in Haldwani</a></li>
+    <li class="breadcrumb-item"><a href="/find#under-verification">Under verification</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ c.name }}</li></ol></nav>
+
+  <header class="mb-4">
+    <h1 class="h3 mb-1">{{ c.name }}</h1>
+    {% if c.official_name and c.official_name != c.name %}<div class="text-muted">Official name: {{ c.official_name }}</div>{% endif %}
+    {% if c.aliases %}<div class="small text-muted">Also listed as: {{ c.aliases | join(', ') }}</div>{% endif %}
+    {% if c.area %}<div class="small text-muted"><i class="bi bi-pin-map"></i> {{ c.area }}</div>{% endif %}
+    <div class="d-flex flex-wrap gap-1 mt-2">
+      <span class="pub-chip pub-chip-ok"><i class="bi bi-patch-check-fill"></i> {{ c.identity_text }}</span>
+      <span class="pub-chip pub-chip-muted"><i class="bi bi-geo-alt"></i> Location not yet verified · no map pin</span>
+    </div>
+  </header>
+
+  <div class="row g-4">
+    <div class="col-lg-7">
+      <section class="pub-panel mb-4">
+        <h2 class="h6 pub-panel-title"><i class="bi bi-hourglass-split"></i> Not yet verified</h2>
+        <p class="small mb-2">This blood bank is named in an official source, so we know it exists. We have not yet
+          verified the following, so we do not show it:</p>
+        <ul class="small mb-2">{% for m in c.missing %}<li>{{ m }}</li>{% endfor %}</ul>
+        <p class="small mb-0">For contact details and current stock, use the official
+          <a href="{{ eraktkosh_url }}" target="_blank" rel="noopener">e-RaktKosh</a> portal.
+          This site shows no availability for this blood bank.</p>
+      </section>
+    </div>
+    <div class="col-lg-5">
+      <section class="pub-panel">
+        <h2 class="h6 pub-panel-title"><i class="bi bi-journal-text"></i> Sources</h2>
+        <ul class="list-unstyled small mb-0">
+          {% for e in c.evidence %}
+          <li class="mb-2"><span class="pub-tag">{{ e.type }}</span>
+            {% if e.url %}<a href="{{ e.url }}" target="_blank" rel="noopener">{{ e.title }}</a>{% else %}{{ e.title }}{% endif %}
+            <span class="text-muted">· retrieved {{ e.date.strftime('%d %b %Y') }}</span></li>
+          {% endfor %}
+        </ul>
+        <p class="small text-muted mt-2 mb-0"><a href="/find/about-data">How we verify</a></p>
+      </section>
+    </div>
+  </div>
+</div>
+{% endblock %}

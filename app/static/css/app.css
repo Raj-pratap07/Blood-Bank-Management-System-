@@ -42,3 +42,7 @@ body { background: var(--bb-surface); }
 }
 
 .bb-facility-badge { background: rgba(255, 255, 255, .18); color: #fff; font-weight: 500; }
+
+/* Public demonstration banner (settings.demo_mode) */
+.demo-banner { background: #fff4dc; color: #5c3d00; border-bottom: 1px solid #f0d9a8; font-size: .85rem;
+  padding: .5rem 1rem; text-align: center; }
