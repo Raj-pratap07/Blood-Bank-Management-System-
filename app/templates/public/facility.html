@@ -28,10 +28,11 @@
         {% for c in f.contacts if c.kind != 'phone' %}
         <div class="pub-phone"><a href="{{ c.href }}" {% if c.kind == 'website' %}target="_blank" rel="noopener"{% endif %}>
           <i class="bi bi-{{ 'envelope' if c.kind == 'email' else 'globe' }}"></i> {{ c.value }}</a>
-          {% if c.confirmed %}<span class="pub-chip pub-chip-ok">Confirmed</span>{% else %}<span class="pub-chip pub-chip-warn">Not yet confirmed</span>{% endif %}</div>
+          <span class="pub-chip {{ 'pub-chip-ok' if c.confirmed else 'pub-chip-warn' }}" title="{{ c.status_text }}">{{ c.badge }}</span></div>
         {% endfor %}
-        <p class="small text-muted mt-2 mb-0">Numbers marked <em>not yet confirmed</em> come from the source listed below
-          but haven't been checked directly yet.</p>
+        <p class="small text-muted mt-2 mb-0"><em>Source confirmed</em> means the detail matched an official source (such as
+          e-RaktKosh) on the date shown. It has not been tested by contacting the blood bank. <em>Not yet confirmed</em>
+          details come from the source listed below but haven't been checked.</p>
       </section>
 
       <section class="pub-panel mb-4" id="availability">

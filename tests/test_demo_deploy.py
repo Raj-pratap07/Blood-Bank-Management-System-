@@ -1,7 +1,9 @@
 """Public demo deployment (Render Free): demo database builder, demo guard, banner and health check."""
 from __future__ import annotations
 
+import json
 import sqlite3
+from datetime import date, timedelta
 
 import bcrypt
 import pytest
@@ -50,8 +52,16 @@ def test_builds_synthetic_demo_with_real_facilities(demo_env, demo_engine):
                                           "ssj-base-haldwani", "sushila-tiwari-govt-hosp"]
         for f in real:
             assert fsvc.scope_status(f, VerificationScope.IDENTITY).status.value == "source_confirmed"
-            assert not f.is_listed and not f.has_coordinates and not f.contacts
+            assert f.is_listed and not fsvc.listing_blockers(f)
+            assert not f.has_coordinates and not fsvc.map_eligible(f)                 # no pin without verified location
+            assert not f.is_participating and f.stock_visibility.value == "hidden"
+            assert {"government_document", "government_portal"} <= {s.source_type.value for s in f.sources}
+            phones = [c for c in f.contacts if c.kind.value == "phone"]
+            assert len(phones) == 1 and phones[0].is_public and fsvc.contact_status(phones[0]).is_positive
             assert db.scalar(select(func.count()).select_from(BloodUnit).where(BloodUnit.facility_id == f.id)) == 0
+        bk = next(f for f in real if f.slug.startswith("lt-sh-bal-kishan"))
+        assert [c for c in bk.contacts if c.kind.value == "email"] == []            # deliberately not retained
+        assert "does not retain it" in " ".join(s.notes or "" for s in bk.sources)
         assert db.scalar(select(func.count()).select_from(BloodUnit)) > 0          # synthetic stock: demo facility only
     finally:
         db.close()
@@ -184,3 +194,172 @@ def test_healthz(client):
     r = client.get("/healthz")
     assert r.status_code == 200 and r.json() == {"status": "ok"}
     assert r.headers["Cache-Control"] == "no-store"
+
+
+# ---------------------------------------------------------------- listed real facilities on the demo site
+@pytest.fixture()
+def demo_site(demo_env, demo_engine):
+    from fastapi.testclient import TestClient
+
+    from app.database import get_db
+    from app.main import create_app
+
+    demo.build(demo_engine)
+    app = create_app(init=False)
+    S = sessionmaker(bind=demo_engine, autoflush=False, expire_on_commit=False)
+
+    def _db():
+        s = S()
+        try:
+            yield s
+        finally:
+            s.close()
+
+    app.dependency_overrides[get_db] = _db
+    with TestClient(app) as c:
+        yield c, S
+
+
+REAL = sorted(demo.EXPECTED_FACILITIES)
+
+
+def test_demo_site_lists_four_facilities_without_pins(demo_site):
+    c, _ = demo_site
+    html = c.get("/find").text
+    assert all(f'data-slug="{s}"' in html for s in REAL)
+    assert "pub-card-candidate" not in html                                    # nothing left "under verification"
+    data = json.loads(html.split('<script id="facility-data" type="application/json">')[1].split("</script>")[0])
+    assert sorted(d["slug"] for d in data) == REAL and all(d["lat"] is None and d["lon"] is None for d in data)
+    features = c.get("/api/public/facilities").json()["features"]
+    assert len(features) == 4 and all(f["geometry"] is None for f in features)
+
+
+def test_demo_site_never_shows_stock_for_real_facilities(demo_site):
+    c, _ = demo_site
+    body = c.get("/api/public/availability").json()
+    assert body["results"] == [] and body["facilities_reporting"] == 0
+    for slug in REAL:
+        assert "Not published." in c.get(f"/find/{slug}").text
+    page = " ".join(c.get("/find?group=O%2B").text.split())
+    assert "No participating blood bank has published current stock" in page
+
+
+def test_withheld_email_is_not_stored_and_others_are_public(demo_site):
+    c, S = demo_site
+    with S() as db:
+        emails = {f.slug: [x.value for x in f.contacts if x.kind.value == "email"]
+                  for f in db.scalars(select(Facility).where(Facility.is_demo.is_(False)))}
+    assert emails["lt-sh-bal-kishan-devki-joshi-charitable-blood-bank"] == []
+    assert sum(len(v) for v in emails.values()) == 3
+    for slug, values in emails.items():
+        for v in values:
+            assert v in c.get(f"/find/{slug}").text
+
+
+def test_public_contacts_say_source_confirmed(demo_site):
+    c, _ = demo_site
+    for slug in REAL:
+        page = c.get(f"/find/{slug}").text
+        assert "Source confirmed" in page and "not tested by contacting the facility" in page
+
+
+def test_demo_facility_still_private_and_workflows_work(demo_site):
+    c, _ = demo_site
+    assert c.get("/find/demo-blood-centre").status_code == 404
+    login(c, "demo.staff", PASSWORDS["BBMS_DEMO_PASSWORD_STAFF"])
+    r = _post(c, "/donors/new", {"full_name": "Listed Demo Donor", "gender": "male", "date_of_birth": "1990-01-01",
+                                 "blood_group": "A+", "phone": "9700066655", "weight_kg": "70", "city": "Haldwani"},
+              "/donors/new")
+    assert r.status_code == 303
+
+
+# ---------------------------------------------------------------- reviewed-data contract and expiry
+def _data_variant(tmp_path, monkeypatch, change):
+    entries = json.loads(demo.FACILITIES_FILE.read_text(encoding="utf-8"))
+    change(entries)
+    path = tmp_path / "facilities-variant.json"
+    path.write_text(json.dumps(entries), encoding="utf-8")
+    monkeypatch.setattr(demo, "FACILITIES_FILE", path)
+
+
+def _age_all_checks(entries, days):
+    old = (date.today() - timedelta(days=days)).isoformat()
+    for e in entries:
+        for v in e["verifications"]:
+            v["verified_on"] = old
+
+
+def _unverified_public_phone(entries):
+    entries[0]["contacts"].append({"key": "extra", "kind": "phone", "value": "9800000111", "source": "nhm",
+                                   "is_public": True})
+
+
+def _add_coordinates(entries):
+    entries[0]["location"] = {"latitude": 29.2, "longitude": 79.5, "source": "eraktkosh"}
+
+
+def _unlist_one(entries):
+    entries[1]["list"] = False
+
+
+def _extra_facility(entries):
+    extra = json.loads(json.dumps(entries[0]))
+    extra["display_name"] = extra["official_name"] = "Fictional Extra Centre"
+    extra["aliases"] = []
+    extra["contacts"] = [dict(extra["contacts"][0], value="9800000112")]
+    extra["verifications"] = [v for v in extra["verifications"] if v.get("contact") in (None, "phone")]
+    entries.append(extra)
+
+
+@pytest.mark.parametrize("change,match", [
+    (_add_coordinates, "has coordinates"),
+    (_unverified_public_phone, "never confirmed against a source"),
+    (_unlist_one, "not listed"),
+    (_extra_facility, "expected exactly the reviewed facilities"),
+])
+def test_builder_refuses_unreviewed_data(demo_env, demo_engine, tmp_path, monkeypatch, change, match):
+    _data_variant(tmp_path, monkeypatch, change)
+    with pytest.raises(demo.Refused, match=match):
+        demo.build(demo_engine)
+
+
+def test_expired_verification_keeps_demo_up_but_unlists(demo_env, demo_engine, tmp_path, monkeypatch):
+    _data_variant(tmp_path, monkeypatch, lambda e: _age_all_checks(e, settings.verification_max_age_days + 10))
+    summary = demo.build(demo_engine)                                   # starts: no outage on expiry
+    assert summary["listed"] == 0 and len(summary["warnings"]) == 4
+    assert all("NOT publicly listed until re-verified" in w for w in summary["warnings"])
+    db = sessionmaker(bind=demo_engine)()
+    try:
+        real = list(db.scalars(select(Facility).where(Facility.is_demo.is_(False))))
+        assert len(real) == 4 and not any(f.is_listed for f in real)      # automatically withheld
+        for f in real:                                                   # verification dates were NOT extended
+            assert fsvc.scope_status(f, VerificationScope.IDENTITY).status.value == "outdated"
+    finally:
+        db.close()
+
+
+def test_mixed_expiry_lists_only_current_facilities(demo_env, demo_engine, tmp_path, monkeypatch):
+    def change(entries):
+        old = (date.today() - timedelta(days=settings.verification_max_age_days + 10)).isoformat()
+        for v in entries[0]["verifications"]:
+            v["verified_on"] = old
+    _data_variant(tmp_path, monkeypatch, change)
+    summary = demo.build(demo_engine)
+    assert summary["listed"] == 3 and len(summary["warnings"]) == 1
+
+
+def test_expired_record_with_a_data_error_still_refuses(demo_env, demo_engine, tmp_path, monkeypatch):
+    def change(entries):
+        _age_all_checks(entries, settings.verification_max_age_days + 10)
+        entries[0]["contacts"] = []                                       # structural error, not just expiry
+        entries[0]["verifications"] = [v for v in entries[0]["verifications"] if v["scope"] != "contact"]
+    _data_variant(tmp_path, monkeypatch, change)
+    with pytest.raises(demo.Refused, match="loading the Haldwani facility records failed"):
+        demo.build(demo_engine)
+
+
+def test_warns_before_verification_expires(demo_env, demo_engine, tmp_path, monkeypatch):
+    _data_variant(tmp_path, monkeypatch,
+                  lambda e: _age_all_checks(e, settings.verification_max_age_days - demo.EXPIRY_WARNING_DAYS + 5))
+    summary = demo.build(demo_engine)
+    assert summary["listed"] == 4 and all("re-verify on e-RaktKosh" in w for w in summary["warnings"])

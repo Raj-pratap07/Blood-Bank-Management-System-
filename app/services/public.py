@@ -41,6 +41,7 @@ class PublicContact:
     confirmed: bool
     status_text: str
     href: str
+    badge: str = "Not yet confirmed"        # short public label for the contact's verification status
 
 
 @dataclass
@@ -78,8 +79,8 @@ class PublicFacility:
             "ownership": self.ownership, "address": self.address, "city": self.city,
             "identity": self.identity_text, "location_verified": self.location_verified,
             "lat": self.latitude, "lon": self.longitude,
-            "phones": [{"value": c.value, "label": c.label, "confirmed": c.confirmed, "status": c.status_text,
-                        "href": c.href} for c in self.phones],
+            "phones": [{"value": c.value, "label": c.label, "confirmed": c.confirmed, "badge": c.badge,
+                        "status": c.status_text, "href": c.href} for c in self.phones],
             "directions": self.directions, "url": f"/find/{self.slug}",
         }
 
@@ -124,13 +125,31 @@ def directions_links(lat: float, lon: float) -> dict[str, str]:
     }
 
 
+# Contact badges say HOW a detail was checked: "Source confirmed" means it matched an official source (such as
+# e-RaktKosh) on the date shown, NOT that anyone contacted the facility.
+CONTACT_BADGES = {
+    VerificationStatus.SOURCE_CONFIRMED: "Source confirmed",
+    VerificationStatus.FACILITY_CONFIRMED: "Confirmed by facility",
+    VerificationStatus.FIELD_VERIFIED: "Verified on site",
+    VerificationStatus.OUTDATED: "Re-check due",
+    VerificationStatus.DISPUTED: "Disputed",
+    VerificationStatus.UNVERIFIED: "Not yet confirmed",
+}
+
+
 def _contact(c: FacilityContact) -> PublicContact:
     eff = fsvc.contact_status(c)
     href = {"phone": f"tel:{c.value}", "email": f"mailto:{c.value}", "website": c.value}[c.kind.value]
-    confirmed = eff.is_positive
-    text = ("Confirmed" + (f" {eff.entry.verified_on:%d %b %Y}" if eff.entry else "")) if confirmed else \
-        "Not yet confirmed — taken from the source listed below"
-    return PublicContact(c.kind.value, c.value, c.label, confirmed, text, href)
+    when = f" on {eff.entry.verified_on:%d %b %Y}" if eff.entry else ""
+    text = {
+        VerificationStatus.SOURCE_CONFIRMED: f"Matched an official source{when}; not tested by contacting the facility",
+        VerificationStatus.FACILITY_CONFIRMED: f"Confirmed directly with the facility{when}",
+        VerificationStatus.FIELD_VERIFIED: f"Verified on site{when}",
+        VerificationStatus.OUTDATED: f"Last checked{when}; re-check due",
+        VerificationStatus.DISPUTED: "Disputed: treat with care",
+        VerificationStatus.UNVERIFIED: "Not yet confirmed: taken from the source listed below",
+    }[eff.status]
+    return PublicContact(c.kind.value, c.value, c.label, eff.is_positive, text, href, CONTACT_BADGES[eff.status])
 
 
 def _evidence(f: Facility) -> list[dict]:

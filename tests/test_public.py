@@ -184,10 +184,18 @@ class TestContacts:
     def test_unverified_phone_is_never_presented_as_confirmed(self, client, world):
         a = client.get(f"/find/{world['a'].slug}").text
         b = client.get(f"/find/{world['b'].slug}").text
-        assert "9800000101" in a and "Confirmed" in a
+        assert "9800000101" in a and "Source confirmed" in a
         assert "9800000102" in b and "Not yet confirmed" in b
-        # Beta's only phone is unverified, so its page must not carry a "Confirmed" chip at all.
-        assert "bi-patch-check-fill\"></i> Confirmed" not in b
+        # Beta's only phone is unverified, so its page must not carry a positive chip at all.
+        assert 'bi-patch-check-fill"></i> Source confirmed' not in b and "Source confirmed</span>" not in b
+
+    def test_source_confirmed_badge_explains_it_is_not_facility_tested(self, client, world):
+        a = client.get(f"/find/{world['a'].slug}").text
+        assert "not tested by contacting the facility" in a
+        phones = {p["value"]: p for d in client.get("/api/public/facilities").json()["features"]
+                  for p in d["properties"]["phones"]}
+        assert phones["9800000101"]["badge"] == "Source confirmed"
+        assert phones["9800000102"]["badge"] == "Not yet confirmed"
 
     def test_private_and_retired_contacts_hidden(self, client, db, world):
         p, a = world["platform"], world["a"]

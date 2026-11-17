@@ -2,31 +2,57 @@
   {
     "display_name": "Sushila Tiwari Govt. Hosp.",
     "official_name": "Sushila Tiwari Govt. Hosp.",
+    "aliases": ["Dr. Shusheela Tiwari Govt. Hospital Blood Bank"],
+    "ownership": "government",
+    "address_line": "Dr. Shusheela Tiwari Govt. Medical College",
+    "city": "Haldwani",
     "district": "Nainital",
     "state": "Uttarakhand",
     "operational_status": "unknown",
-    "notes": "Listed under Nainital in the NHM Uttarakhand blood bank / storage centre list (undated). Address, phone numbers and coordinates are not yet sourced, so the facility is not listed publicly and has no map marker. No stock data.",
+    "notes": "Listed under Nainital in the NHM Uttarakhand blood bank list (undated) and shown on the official e-RaktKosh portal (Uttarakhand > Nainital), category 'Government', with the address and contacts below (screenshots, 2026-11-17). No PIN code or coordinates in the evidence, so none recorded and no map marker. e-RaktKosh stock figures are not imported; this facility does not publish availability on this site.",
     "sources": [
       {"key": "nhm", "source_type": "government_document",
        "title": "NHM Uttarakhand: Blood Bank / Storage Center list (undated)",
        "reference": "https://nhm.uk.gov.in/files/Blood_Bank__Storage_Center_list.pdf",
        "retrieved_on": "2026-11-17",
-       "notes": "Facility named under district Nainital. On 2026-11-17 the URL returned HTTP 404; the entry was confirmed from project research and a search-engine index of the same document. The document is undated: re-check against e-RaktKosh."}
+       "notes": "Facility named under district Nainital. On 2026-11-17 the URL returned HTTP 404; the entry was confirmed from project research and a search-engine index of the same document. The document is undated: re-check against e-RaktKosh."},
+      {"key": "eraktkosh", "source_type": "government_portal",
+       "title": "e-RaktKosh (MoHFW): Blood Availability results, Uttarakhand > Nainital",
+       "reference": "https://eraktkosh.mohfw.gov.in/",
+       "retrieved_on": "2026-11-17",
+       "notes": "Official MoHFW portal. Details transcribed from screenshots of the portal's Blood Availability results (State: Uttarakhand, District: Nainital) captured by the project team on 2026-11-17; not re-fetched by machine. Stock and availability figures shown there are deliberately NOT imported."}
+    ],
+    "contacts": [
+      {"key": "phone", "kind": "phone", "value": "9997244005", "label": "Blood centre (e-RaktKosh)", "source": "eraktkosh", "is_public": true},
+      {"key": "email", "kind": "email", "value": "bloodbank009@gmail.com", "label": "Blood centre (e-RaktKosh)", "source": "eraktkosh", "is_public": true}
     ],
     "verifications": [
       {"scope": "identity", "status": "source_confirmed", "method": "official_source_check", "source": "nhm",
        "verified_on": "2026-11-17",
-       "evidence_note": "Named as 'Sushila Tiwari Govt. Hosp.' under Nainital in the NHM Uttarakhand blood bank list. No direct contact with the facility."}
+       "evidence_note": "Named as 'Sushila Tiwari Govt. Hosp.' under Nainital in the NHM Uttarakhand blood bank list. No direct contact with the facility."},
+      {"scope": "identity", "status": "source_confirmed", "method": "official_source_check", "source": "eraktkosh",
+       "verified_on": "2026-11-17",
+       "evidence_note": "Listed as 'Dr. Shusheela Tiwari Govt. Hospital Blood Bank' on the official e-RaktKosh portal (Uttarakhand > Nainital), per screenshots captured 2026-11-17. Not confirmed directly with the facility."},
+      {"scope": "contact", "status": "source_confirmed", "method": "official_source_check", "source": "eraktkosh", "contact": "phone",
+       "verified_on": "2026-11-17",
+       "evidence_note": "Phone 9997244005 shown for this blood centre on the official e-RaktKosh portal (Uttarakhand > Nainital), per screenshots captured 2026-11-17. Not confirmed directly with the facility."},
+      {"scope": "contact", "status": "source_confirmed", "method": "official_source_check", "source": "eraktkosh", "contact": "email",
+       "verified_on": "2026-11-17",
+       "evidence_note": "Email address shown for this blood centre on the official e-RaktKosh portal (Uttarakhand > Nainital), per screenshots captured 2026-11-17. Not confirmed directly with the facility."}
     ],
-    "list": false
+    "list": true
   },
   {
     "display_name": "SSJ Base Haldwani",
     "official_name": "SSJ Base Haldwani",
+    "aliases": ["Soban Singh Jeena Base Hospital Haldwani"],
+    "ownership": "government",
+    "address_line": "Blood bank, Soban Singh Jeena Base Hospital",
+    "city": "Haldwani",
     "district": "Nainital",
     "state": "Uttarakhand",
     "operational_status": "unknown",
-    "notes": "Listed under Nainital in the NHM Uttarakhand blood bank / storage centre list (undated). Address, phone numbers and coordinates are not yet sourced, so the facility is not listed publicly and has no map marker. No stock data.",
+    "notes": "Listed under Nainital in the NHM Uttarakhand blood bank list (undated) and shown on the official e-RaktKosh portal (Uttarakhand > Nainital), category 'Government', with the address and contacts below (screenshots, 2026-11-17). No PIN code or coordinates in the evidence, so none recorded and no map marker. e-RaktKosh stock figures are not imported; this facility does not publish availability on this site.",
     "sources": [
       {"key": "nhm", "source_type": "government_document",
        "title": "NHM Uttarakhand: Blood Bank / Storage Center list (undated)",
@@ -37,55 +63,113 @@
        "title": "NHM 2025-26 approval document (mentions SSJ Base Haldwani Blood Bank)",
        "reference": "https://cdnbbsr.s3waas.gov.in/s37993e11204b215b27694b6f139e34ce8/uploads/2025/05/20250529939844366.pdf",
        "retrieved_on": "2026-11-17",
-       "notes": "Supporting reference supplied by project research. Scanned PDF: its text could not be machine-checked when this record was loaded. Not used as evidence for any verification."}
+       "notes": "Supporting reference supplied by project research. Scanned PDF: its text could not be machine-checked when this record was loaded. Not used as evidence for any verification."},
+      {"key": "eraktkosh", "source_type": "government_portal",
+       "title": "e-RaktKosh (MoHFW): Blood Availability results, Uttarakhand > Nainital",
+       "reference": "https://eraktkosh.mohfw.gov.in/",
+       "retrieved_on": "2026-11-17",
+       "notes": "Official MoHFW portal. Details transcribed from screenshots of the portal's Blood Availability results (State: Uttarakhand, District: Nainital) captured by the project team on 2026-11-17; not re-fetched by machine. Stock and availability figures shown there are deliberately NOT imported."}
+    ],
+    "contacts": [
+      {"key": "phone", "kind": "phone", "value": "7017977715", "label": "Blood centre (e-RaktKosh)", "source": "eraktkosh", "is_public": true},
+      {"key": "email", "kind": "email", "value": "bloodbankbasehaldwani@gmail.com", "label": "Blood centre (e-RaktKosh)", "source": "eraktkosh", "is_public": true}
     ],
     "verifications": [
       {"scope": "identity", "status": "source_confirmed", "method": "official_source_check", "source": "nhm",
        "verified_on": "2026-11-17",
-       "evidence_note": "Named as 'SSJ Base Haldwani' under Nainital in the NHM Uttarakhand blood bank list. No direct contact with the facility."}
+       "evidence_note": "Named as 'SSJ Base Haldwani' under Nainital in the NHM Uttarakhand blood bank list. No direct contact with the facility."},
+      {"scope": "identity", "status": "source_confirmed", "method": "official_source_check", "source": "eraktkosh",
+       "verified_on": "2026-11-17",
+       "evidence_note": "Listed as 'Soban Singh Jeena Base Hospital Haldwani' on the official e-RaktKosh portal (Uttarakhand > Nainital), per screenshots captured 2026-11-17. Not confirmed directly with the facility."},
+      {"scope": "contact", "status": "source_confirmed", "method": "official_source_check", "source": "eraktkosh", "contact": "phone",
+       "verified_on": "2026-11-17",
+       "evidence_note": "Phone 7017977715 shown for this blood centre on the official e-RaktKosh portal (Uttarakhand > Nainital), per screenshots captured 2026-11-17. Not confirmed directly with the facility."},
+      {"scope": "contact", "status": "source_confirmed", "method": "official_source_check", "source": "eraktkosh", "contact": "email",
+       "verified_on": "2026-11-17",
+       "evidence_note": "Email address shown for this blood centre on the official e-RaktKosh portal (Uttarakhand > Nainital), per screenshots captured 2026-11-17. Not confirmed directly with the facility."}
     ],
-    "list": false
+    "list": true
   },
   {
     "display_name": "Haldwani City Blood Bank",
     "official_name": "Haldwani City Blood Bank",
+    "aliases": ["Haldwani City Blood Centre"],
+    "ownership": "charitable",
+    "address_line": "Thandi Sadak, Bhotiapara(w) Police, Nainital Road",
+    "city": "Haldwani",
     "district": "Nainital",
     "state": "Uttarakhand",
     "operational_status": "unknown",
-    "notes": "Listed under Nainital in the NHM Uttarakhand blood bank / storage centre list (undated). Address, phone numbers and coordinates are not yet sourced, so the facility is not listed publicly and has no map marker. No stock data.",
+    "notes": "Listed under Nainital in the NHM Uttarakhand blood bank list (undated) and shown on the official e-RaktKosh portal (Uttarakhand > Nainital), category 'Charitable/Voluntary', with the address and contacts below (screenshots, 2026-11-17). No PIN code or coordinates in the evidence, so none recorded and no map marker. e-RaktKosh stock figures are not imported; this facility does not publish availability on this site. Ownership is recorded as 'charitable' from the e-RaktKosh category 'Charitable/Voluntary'. A search-engine text extraction of the undated NHM list appeared to show 'Pvt.' (private) for this facility; the more recent official portal category is used.",
     "sources": [
       {"key": "nhm", "source_type": "government_document",
        "title": "NHM Uttarakhand: Blood Bank / Storage Center list (undated)",
        "reference": "https://nhm.uk.gov.in/files/Blood_Bank__Storage_Center_list.pdf",
        "retrieved_on": "2026-11-17",
-       "notes": "Facility named under district Nainital. On 2026-11-17 the URL returned HTTP 404; the entry was confirmed from project research and a search-engine index of the same document. The document is undated: re-check against e-RaktKosh."}
+       "notes": "Facility named under district Nainital. On 2026-11-17 the URL returned HTTP 404; the entry was confirmed from project research and a search-engine index of the same document. The document is undated: re-check against e-RaktKosh."},
+      {"key": "eraktkosh", "source_type": "government_portal",
+       "title": "e-RaktKosh (MoHFW): Blood Availability results, Uttarakhand > Nainital",
+       "reference": "https://eraktkosh.mohfw.gov.in/",
+       "retrieved_on": "2026-11-17",
+       "notes": "Official MoHFW portal. Details transcribed from screenshots of the portal's Blood Availability results (State: Uttarakhand, District: Nainital) captured by the project team on 2026-11-17; not re-fetched by machine. Stock and availability figures shown there are deliberately NOT imported."}
+    ],
+    "contacts": [
+      {"key": "phone", "kind": "phone", "value": "8077757610", "label": "Blood centre (e-RaktKosh)", "source": "eraktkosh", "is_public": true},
+      {"key": "email", "kind": "email", "value": "haldwanicitybloodbank@gmail.com", "label": "Blood centre (e-RaktKosh)", "source": "eraktkosh", "is_public": true}
     ],
     "verifications": [
       {"scope": "identity", "status": "source_confirmed", "method": "official_source_check", "source": "nhm",
        "verified_on": "2026-11-17",
-       "evidence_note": "Named as 'Haldwani City Blood Bank' under Nainital in the NHM Uttarakhand blood bank list. No direct contact with the facility."}
+       "evidence_note": "Named as 'Haldwani City Blood Bank' under Nainital in the NHM Uttarakhand blood bank list. No direct contact with the facility."},
+      {"scope": "identity", "status": "source_confirmed", "method": "official_source_check", "source": "eraktkosh",
+       "verified_on": "2026-11-17",
+       "evidence_note": "Listed as 'Haldwani City Blood Centre' on the official e-RaktKosh portal (Uttarakhand > Nainital), per screenshots captured 2026-11-17. Not confirmed directly with the facility."},
+      {"scope": "contact", "status": "source_confirmed", "method": "official_source_check", "source": "eraktkosh", "contact": "phone",
+       "verified_on": "2026-11-17",
+       "evidence_note": "Phone 8077757610 shown for this blood centre on the official e-RaktKosh portal (Uttarakhand > Nainital), per screenshots captured 2026-11-17. Not confirmed directly with the facility."},
+      {"scope": "contact", "status": "source_confirmed", "method": "official_source_check", "source": "eraktkosh", "contact": "email",
+       "verified_on": "2026-11-17",
+       "evidence_note": "Email address shown for this blood centre on the official e-RaktKosh portal (Uttarakhand > Nainital), per screenshots captured 2026-11-17. Not confirmed directly with the facility."}
     ],
-    "list": false
+    "list": true
   },
   {
     "display_name": "Lt. Sh. Bal Kishan Devki Joshi Charitable Blood Bank",
     "official_name": "Lt. Sh. Bal Kishan Devki Joshi Charitable Blood Bank",
+    "aliases": ["Lt. Sh. Bal Kishan Devki Joshi Charitable Blood Centre"],
+    "ownership": "charitable",
+    "address_line": "1st Floor, Laxmi Mohan Tower, Ganesh Vihar, Mukhani, near Sai Hospital",
+    "city": "Haldwani",
     "district": "Nainital",
     "state": "Uttarakhand",
     "operational_status": "unknown",
-    "notes": "Listed under Nainital in the NHM Uttarakhand blood bank / storage centre list (undated). Address, phone numbers and coordinates are not yet sourced, so the facility is not listed publicly and has no map marker. No stock data.",
+    "notes": "Listed under Nainital in the NHM Uttarakhand blood bank list (undated) and shown on the official e-RaktKosh portal (Uttarakhand > Nainital), category 'Charitable/Voluntary', with the address and contacts below (screenshots, 2026-11-17). No PIN code or coordinates in the evidence, so none recorded and no map marker. e-RaktKosh stock figures are not imported; this facility does not publish availability on this site.",
     "sources": [
       {"key": "nhm", "source_type": "government_document",
        "title": "NHM Uttarakhand: Blood Bank / Storage Center list (undated)",
        "reference": "https://nhm.uk.gov.in/files/Blood_Bank__Storage_Center_list.pdf",
        "retrieved_on": "2026-11-17",
-       "notes": "Facility named under district Nainital. On 2026-11-17 the URL returned HTTP 404; the entry was confirmed from project research and a search-engine index of the same document. The document is undated: re-check against e-RaktKosh."}
+       "notes": "Facility named under district Nainital. On 2026-11-17 the URL returned HTTP 404; the entry was confirmed from project research and a search-engine index of the same document. The document is undated: re-check against e-RaktKosh."},
+      {"key": "eraktkosh", "source_type": "government_portal",
+       "title": "e-RaktKosh (MoHFW): Blood Availability results, Uttarakhand > Nainital",
+       "reference": "https://eraktkosh.mohfw.gov.in/",
+       "retrieved_on": "2026-11-17",
+       "notes": "Official MoHFW portal. Details transcribed from screenshots of the portal's Blood Availability results (State: Uttarakhand, District: Nainital) captured by the project team on 2026-11-17; not re-fetched by machine. Stock and availability figures shown there are deliberately NOT imported. e-RaktKosh also displays an email address for this centre; the project deliberately does not retain it because it appears to be an individual's personal address."}
+    ],
+    "contacts": [
+      {"key": "phone", "kind": "phone", "value": "9058282981", "label": "Blood centre (e-RaktKosh)", "source": "eraktkosh", "is_public": true}
     ],
     "verifications": [
       {"scope": "identity", "status": "source_confirmed", "method": "official_source_check", "source": "nhm",
        "verified_on": "2026-11-17",
-       "evidence_note": "Named as 'Lt. Sh. Bal Kishan Devki Joshi Charitable Blood Bank' under Nainital in the NHM Uttarakhand blood bank list. No direct contact with the facility."}
+       "evidence_note": "Named as 'Lt. Sh. Bal Kishan Devki Joshi Charitable Blood Bank' under Nainital in the NHM Uttarakhand blood bank list. No direct contact with the facility."},
+      {"scope": "identity", "status": "source_confirmed", "method": "official_source_check", "source": "eraktkosh",
+       "verified_on": "2026-11-17",
+       "evidence_note": "Listed as 'Lt. Sh. Bal Kishan Devki Joshi Charitable Blood Centre' on the official e-RaktKosh portal (Uttarakhand > Nainital), per screenshots captured 2026-11-17. Not confirmed directly with the facility."},
+      {"scope": "contact", "status": "source_confirmed", "method": "official_source_check", "source": "eraktkosh", "contact": "phone",
+       "verified_on": "2026-11-17",
+       "evidence_note": "Phone 9058282981 shown for this blood centre on the official e-RaktKosh portal (Uttarakhand > Nainital), per screenshots captured 2026-11-17. Not confirmed directly with the facility."}
     ],
-    "list": false
+    "list": true
   }
 ]

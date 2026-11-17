@@ -25,7 +25,7 @@
     f.phones.forEach((p) => {
       const row = el("div", { class: "small" });
       const a = el("a", { href: p.href }, p.value);
-      row.append(a, document.createTextNode(p.confirmed ? " · confirmed" : " · not yet confirmed"));
+      row.append(a, document.createTextNode(` · ${(p.badge || (p.confirmed ? "Source confirmed" : "Not yet confirmed")).toLowerCase()}`));
       box.append(row);
     });
     const actions = el("div", { class: "d-flex flex-wrap gap-1 mt-2" });

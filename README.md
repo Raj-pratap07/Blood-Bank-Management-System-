@@ -401,14 +401,46 @@ python -m scripts.load_facilities data/haldwani_facilities.json --actor <platfor
 `data/haldwani_facilities.json` holds the four Nainital-district blood banks named in the NHM Uttarakhand
 *Blood Bank / Storage Center list* (`https://nhm.uk.gov.in/files/Blood_Bank__Storage_Center_list.pdf`):
 Sushila Tiwari Govt. Hosp., SSJ Base Haldwani, Haldwani City Blood Bank, and Lt. Sh. Bal Kishan Devki Joshi
-Charitable Blood Bank. For each one, identity is *source-confirmed* only; no direct contact was made. **No
-address, phone number, coordinates, ownership or stock is recorded.**
+Charitable Blood Bank.
 
-Caveats to resolve before the data is relied on:
-- On 17 Nov 2026 the NHM URL returned HTTP 404. The entries were confirmed from project research and a search
-  engine's index of that document, which is undated.
+All four are **publicly listed**. For each one, the record holds:
+- the e-RaktKosh name as an alias;
+- the e-RaktKosh category as ownership;
+- the address as e-RaktKosh displays it, with city Haldwani;
+- the blood-centre phone and, except for one centre, email.
+
+Each detail is *source-confirmed* against the official [e-RaktKosh](https://eraktkosh.mohfw.gov.in/) portal
+(Uttarakhand > Nainital, transcribed from screenshots taken on 17 Nov 2026). The public badge reads **"Source
+confirmed"**: the details matched an official portal, and nobody has contacted the facilities directly.
+
+What is deliberately left out:
+- **PIN codes and coordinates are not recorded,** because the evidence has none. So there are **no map pins**.
+- **No stock is imported** from e-RaktKosh, and these facilities do not publish availability on this site.
+- **One centre's email is not stored.** e-RaktKosh shows an email for Lt. Sh. Bal Kishan Devki Joshi Charitable
+  Blood Centre, but it appears to be an individual's personal address. The source record notes this.
+
+**Expiry.** Checks expire after `BBMS_VERIFICATION_MAX_AGE_DAYS` (default 180 days). The current checks are dated
+17 Nov 2026, so the last day they count is **16 May 2027**. After that:
+- the running site hides the facility automatically, because listing rules are re-checked on every request;
+- the demo build (`scripts/build_demo_db.py`) still starts, but loads the facility **unlisted** and prints a
+  warning. Verification dates are never extended automatically.
+
+The build also warns 30 days before expiry. To re-list a facility, re-check it on e-RaktKosh and record new,
+dated verifications in the data file.
+
+The demo build checks the loaded data against a reviewed contract (`EXPECTED_FACILITIES`). It refuses to start if
+any real facility:
+- is missing, or is an unexpected extra;
+- has coordinates;
+- participates in stock management, or has operational records;
+- shows a public contact that was never source-confirmed;
+- is not listed while its verification is current.
+
+Remaining caveats:
+- On 17 Nov 2026 the NHM URL returned HTTP 404. The NHM entries were confirmed from project research and a
+  search engine's index of that document, which is undated.
 - The supporting NHM 2025–26 approval document for SSJ is a scanned PDF, and its text was not machine-checked.
-- Re-check every entry against e-RaktKosh before treating it as current.
+- The e-RaktKosh details were transcribed by hand from screenshots, not fetched by machine.
 
 ### Phase 3: multi-facility data isolation
 Each blood bank works in its own **facility**. Every donor, donation, bag, request, issue and staff account

@@ -25,6 +25,7 @@ import os
 import re
 import sqlite3
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 from sqlalchemy import func, select
@@ -32,7 +33,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config import BASE_DIR, settings
 from app.database import engine, init_db
-from app.models import Donor, Facility, Role, User, VerificationScope
+from app.models import (AvailabilityPublication, BloodRequest, BloodUnit, Donation, Donor, Facility, Issue, Role,
+                        StockVisibility, User, VerificationScope)
 from app.services import facilities as fsvc
 from app.utils import business_today
 from scripts import load_facilities
@@ -48,6 +50,16 @@ ACCOUNTS = [
     ("demo.platform", "Demo Platform Administrator", Role.PLATFORM_ADMIN, "BBMS_DEMO_PASSWORD_PLATFORM"),
 ]
 LOCAL_PASSWORDS = {pw for *_, pw in DEMO_USERS}
+
+# Reviewed deployment-data contract for data/haldwani_facilities.json (e-RaktKosh evidence, 2026-11-17).
+# Which REAL facilities may be public is a reviewed decision: changing it must change this set in code review,
+# not only the data file. The build fails closed if anything below does not hold, EXCEPT that a facility whose
+# verification has expired is kept unlisted (automatically hidden) instead of stopping the whole demo.
+EXPECTED_FACILITIES = frozenset({
+    "haldwani-city-blood-bank", "lt-sh-bal-kishan-devki-joshi-charitable-blood-bank",
+    "ssj-base-haldwani", "sushila-tiwari-govt-hosp"})
+OPERATIONAL = (User, Donor, Donation, BloodUnit, BloodRequest, Issue, AvailabilityPublication)
+EXPIRY_WARNING_DAYS = 30
 MIN_PASSWORD = 12
 
 
@@ -107,6 +119,41 @@ def _remove(eng, path: Path) -> None:
             p.unlink()
 
 
+def _real_facility_state(db) -> tuple[list[str], list[str]]:
+    """(problems, warnings) for the real facilities. Any problem means the demo must not start."""
+    today = business_today()
+    real = list(db.scalars(select(Facility).where(Facility.is_demo.is_(False))))
+    problems, warnings = [], []
+    if {f.slug for f in real} != EXPECTED_FACILITIES:
+        problems.append(f"expected exactly the reviewed facilities, found {sorted(f.slug for f in real)}")
+    for f in real:
+        identity = fsvc.scope_status(f, VerificationScope.IDENTITY)
+        if identity.status in fsvc.CONFIRMED_IDENTITY:              # current verification: must be publicly listed
+            if not f.is_listed or fsvc.listing_blockers(f):
+                problems.append(f"{f.slug}: not listed, or does not meet the listing rules")
+            expires = identity.entry.verified_on + timedelta(days=settings.verification_max_age_days)
+            if (expires - today).days <= EXPIRY_WARNING_DAYS:
+                warnings.append(f"{f.slug}: verification expires after {expires:%d %b %Y}; re-verify on e-RaktKosh")
+        elif load_facilities.only_blocked_by_expiry(f):               # expired: must be hidden, never published
+            if f.is_listed:
+                problems.append(f"{f.slug}: verification expired but the facility is listed")
+            warnings.append(f"{f.slug}: verification expired; NOT publicly listed until re-verified")
+        else:
+            problems.append(f"{f.slug}: identity is not confirmed")
+        if f.has_coordinates or f.location_source_id is not None or fsvc.map_eligible(f):
+            problems.append(f"{f.slug}: has coordinates, but no location evidence has been reviewed")
+        if f.is_participating or f.stock_visibility != StockVisibility.HIDDEN:
+            problems.append(f"{f.slug}: must not participate or expose stock")
+        for model in OPERATIONAL:                                   # no accounts, donors, bags, requests, publications
+            if db.scalar(select(func.count()).select_from(model).where(model.facility_id == f.id)):
+                problems.append(f"{f.slug}: has {model.__tablename__} rows")
+        for c in f.contacts:                                        # public details must have been source-checked
+            status = fsvc.contact_status(c).status
+            if c.is_active and c.is_public and not (status.is_positive or status.value == "outdated"):
+                problems.append(f"{f.slug}: public {c.kind.value} was never confirmed against a source")
+    return problems, warnings
+
+
 def build(eng=None) -> dict:
     eng = eng or engine
     if not settings.demo_mode:
@@ -124,20 +171,19 @@ def build(eng=None) -> dict:
         Seeder(db, business_today(), accounts=accounts).run()
     _mark_as_demo(eng)
 
-    rc = load_facilities.run(FACILITIES_FILE, "demo.platform", apply=True, eng=eng, backup=False)
+    rc = load_facilities.run(FACILITIES_FILE, "demo.platform", apply=True, eng=eng, backup=False, expired="unlist")
     if rc != 0:
         raise Refused("loading the Haldwani facility records failed; see the messages above.")
 
     with Session() as db:
+        problems, warnings = _real_facility_state(db)
+        if problems:
+            raise Refused("unexpected real-facility state after loading: " + "; ".join(problems))
         real = list(db.scalars(select(Facility).where(Facility.is_demo.is_(False))))
-        confirmed = [f for f in real if fsvc.scope_status(f, VerificationScope.IDENTITY).status
-                     in fsvc.CONFIRMED_IDENTITY]
-        if len(real) != 4 or len(confirmed) != 4 or any(f.is_listed or f.has_coordinates for f in real):
-            raise Refused("unexpected facility state after loading; refusing to start.")
         users = sorted(db.scalars(select(User.username)))
-        counts = {"facilities": len(real),
+        counts = {"facilities": len(real), "listed": sum(f.is_listed for f in real),
                   "donors": db.scalar(select(func.count()).select_from(Donor))}
-    return {"path": str(path), "users": users, **counts}
+    return {"path": str(path), "users": users, "warnings": warnings, **counts}
 
 
 def main() -> int:
@@ -147,7 +193,10 @@ def main() -> int:
         print(f"Demo database NOT built: {e}", file=sys.stderr)
         return 2
     print(f"Demo database built at {summary['path']}: {summary['donors']} synthetic donors, "
-          f"{summary['facilities']} Haldwani facilities (under verification), accounts: {', '.join(summary['users'])}.")
+          f"{summary['facilities']} Haldwani facilities ({summary['listed']} publicly listed), "
+          f"accounts: {', '.join(summary['users'])}.")
+    for w in summary["warnings"]:
+        print(f"WARNING: {w}", file=sys.stderr)
     return 0
 
 

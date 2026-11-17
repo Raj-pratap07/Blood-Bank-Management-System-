@@ -39,7 +39,7 @@ from pydantic import ValidationError
 from sqlalchemy import or_, select
 
 from app.database import SessionLocal, engine, init_db
-from app.models import Facility, Role, User
+from app.models import Facility, Role, User, VerificationScope
 from app.schemas.facilities import ContactIn, FacilityIn, LocationIn, SourceIn, VerificationIn
 from app.services import facilities as fsvc
 from app.services.errors import ServiceError
@@ -63,8 +63,21 @@ def _exists(db, data: FacilityIn) -> Facility | None:
     return db.scalar(select(Facility).where(or_(Facility.official_name.in_(names), Facility.display_name.in_(names))))
 
 
-def load_entry(db, entry: dict, actor: User) -> tuple[str, Facility | None]:
-    """Create one facility with its evidence. Returns (outcome, facility)."""
+def only_blocked_by_expiry(f: Facility) -> bool:
+    """True if the facility met every listing rule on the day its identity was last confirmed, so the only
+    reason it cannot be listed today is that the verification has expired (re-verification due)."""
+    entry = fsvc.scope_status(f, VerificationScope.IDENTITY).entry
+    return (entry is not None and entry.status in fsvc.CONFIRMED_IDENTITY
+            and not fsvc.listing_blockers(f, today=entry.verified_on))
+
+
+def load_entry(db, entry: dict, actor: User, expired: str = "fail") -> tuple[str, Facility | None]:
+    """Create one facility with its evidence. Returns (outcome, facility).
+
+    expired="fail" (default, the CLI): a facility marked "list" that cannot be listed aborts the whole load.
+    expired="unlist" (the public demo build): if the ONLY reason is an expired verification, the facility is
+    loaded but left unlisted; every other listing blocker still aborts the load.
+    """
     data = _facility_in(entry)
     found = _exists(db, data)
     if found is not None:
@@ -88,10 +101,16 @@ def load_entry(db, entry: dict, actor: User) -> tuple[str, Facility | None]:
             "source_id": sources[v["source"]].id if v.get("source") else None,
             "contact_id": contacts[v["contact"]].id if v.get("contact") else None,
             "verified_on": v["verified_on"], "evidence_note": v["evidence_note"]}), actor)
+    outcome = "created"
     if entry.get("list"):
-        fsvc.set_listed(db, f, True, actor)      # raises with the exact blockers if rules are not met
+        try:
+            fsvc.set_listed(db, f, True, actor)  # raises with the exact blockers if rules are not met
+        except ServiceError:
+            if expired != "unlist" or not only_blocked_by_expiry(f):
+                raise
+            outcome = "created (NOT listed: verification expired, re-verification due)"
     db.refresh(f)
-    return "created", f
+    return outcome, f
 
 
 def _describe(f: Facility) -> str:
@@ -102,7 +121,7 @@ def _describe(f: Facility) -> str:
     return f"{f.display_name} [/find/{f.slug}] -> {state}, {marker}{extra}"
 
 
-def run(path: Path, actor_name: str, apply: bool, eng=None, backup: bool = True) -> int:
+def run(path: Path, actor_name: str, apply: bool, eng=None, backup: bool = True, expired: str = "fail") -> int:
     entries = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(entries, list) or not entries:
         print("The file must contain a non-empty JSON list.", file=sys.stderr)
@@ -129,7 +148,7 @@ def run(path: Path, actor_name: str, apply: bool, eng=None, backup: bool = True)
             return 1
         for i, entry in enumerate(entries, 1):
             try:
-                outcome, f = load_entry(db, entry, actor)
+                outcome, f = load_entry(db, entry, actor, expired=expired)
             except (ValidationError, ServiceError, KeyError) as e:
                 msg = getattr(e, "message", None) or str(e)
                 print(f"Entry {i} ({entry.get('display_name')!r}) rejected: {msg}", file=sys.stderr)

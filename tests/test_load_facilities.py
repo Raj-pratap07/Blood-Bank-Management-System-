@@ -6,6 +6,7 @@ All facility data here is fictional (example.org).
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 
 import pytest
 from sqlalchemy import func, select
@@ -104,6 +105,33 @@ def test_rerun_is_idempotent(engine, db, admin, tmp_path, capsys):
 def test_invalid_entry_rolls_back_whole_file(engine, db, admin, tmp_path, bad):
     assert loader.run(_write(tmp_path, [_verified(), bad]), admin, apply=True, eng=engine) == 1
     assert _count(db) == 0                                                                       # nothing kept
+
+
+def _expired(name="Fictional Expired Centre"):
+    e = _verified(name)
+    old = (business_today() - timedelta(days=400)).isoformat()
+    for v in e["verifications"]:
+        v["verified_on"] = old
+    return e
+
+
+def test_expired_listing_fails_by_default(engine, db, admin, tmp_path):
+    assert loader.run(_write(tmp_path, [_expired()]), admin, apply=True, eng=engine) == 1
+    assert _count(db) == 0                                                # CLI stays strict: nothing loaded
+
+
+def test_expired_listing_can_be_loaded_unlisted(engine, db, admin, tmp_path, capsys):
+    assert loader.run(_write(tmp_path, [_expired()]), admin, apply=True, eng=engine, expired="unlist") == 0
+    assert "NOT listed: verification expired" in capsys.readouterr().out
+    db.expire_all()
+    f = db.scalar(select(Facility).where(Facility.display_name == "Fictional Expired Centre"))
+    assert not f.is_listed and f.verifications                          # evidence kept, dates unchanged
+
+
+def test_unlist_mode_never_hides_data_errors(engine, db, admin, tmp_path):
+    bad = {**_expired("Fictional Broken Centre"), "address_line": None}
+    assert loader.run(_write(tmp_path, [bad]), admin, apply=True, eng=engine, expired="unlist") == 1
+    assert _count(db) == 0
 
 
 def test_requires_platform_admin(engine, db, users, tmp_path):

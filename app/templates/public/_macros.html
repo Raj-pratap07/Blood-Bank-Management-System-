@@ -3,8 +3,8 @@
 <div class="pub-phone {% if compact %}small{% endif %}">
   <a href="{{ c.href }}" class="pub-phone-number"><i class="bi bi-telephone"></i> {{ c.value }}</a>
   {% if c.label %}<span class="text-muted">· {{ c.label }}</span>{% endif %}
-  {% if c.confirmed %}<span class="pub-chip pub-chip-ok" title="{{ c.status_text }}"><i class="bi bi-patch-check-fill"></i> Confirmed</span>
-  {% else %}<span class="pub-chip pub-chip-warn" title="{{ c.status_text }}"><i class="bi bi-exclamation-circle"></i> Not yet confirmed</span>{% endif %}
+  {% if c.confirmed %}<span class="pub-chip pub-chip-ok" title="{{ c.status_text }}"><i class="bi bi-patch-check-fill"></i> {{ c.badge }}</span>
+  {% else %}<span class="pub-chip pub-chip-warn" title="{{ c.status_text }}"><i class="bi bi-exclamation-circle"></i> {{ c.badge }}</span>{% endif %}
 </div>
 {% endfor %}
 {%- endmacro %}
