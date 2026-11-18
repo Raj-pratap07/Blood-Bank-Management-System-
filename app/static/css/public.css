@@ -118,3 +118,23 @@ body.pub { background: var(--pub-bg); color: var(--pub-ink); }
 .pub-map.is-loading::after { content: "Loading map…"; position: absolute; top: .75rem; left: 50%; transform: translateX(-50%);
   z-index: 450; background: rgba(255, 255, 255, .92); color: var(--pub-muted-ink); font-size: .8rem;
   padding: .25rem .65rem; border-radius: 1rem; box-shadow: 0 1px 4px rgba(0, 0, 0, .12); pointer-events: none; }
+
+/* Availability results as cards: one column in the narrow directory panel, more on wide pages; text wraps,
+   so the quantity is never clipped or pushed off-screen (replaces the 7-column table). */
+.pub-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: .5rem; }
+.pub-result { background: var(--pub-surface); border: 1px solid var(--pub-line); border-left: 4px solid var(--pub-muted-ink);
+  border-radius: .6rem; padding: .55rem .7rem; min-width: 0; overflow-wrap: anywhere; font-size: .85rem; }
+.pub-result-available { border-left-color: var(--pub-ok-ink); }
+.pub-result-stale { border-left-color: var(--pub-warn-ink); }
+.pub-result-head { display: flex; justify-content: space-between; align-items: flex-start; gap: .4rem; font-weight: 600; }
+.pub-result-head .badge { flex: none; }
+.pub-result-tags { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; margin: .3rem 0; }
+.pub-result-group { font-weight: 800; color: var(--bb-red); min-width: 2.2rem; }
+.pub-result-qty strong { font-size: .95rem; }
+
+/* Demo map (fictional centre only): distinct dashed amber pin labelled DEMO. */
+.pub-map-demo { height: 380px !important; min-height: 0; border-radius: .75rem; }
+.pub-pin-demo { width: 34px; height: 34px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: #f2a900;
+  border: 3px dashed #5c3d00; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); display: grid; place-items: center; }
+.pub-pin-demo span { transform: rotate(45deg); color: #3b2700; font-size: .5rem; font-weight: 800; letter-spacing: -.02em; line-height: 1; }
+.pub-popup-demo ul { padding-left: 1rem; margin: .25rem 0; columns: 2; }

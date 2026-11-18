@@ -1,5 +1,6 @@
 {% extends "public/base.html" %}
 {% block title %}Demo: blood availability and requests{% endblock %}
+{% block head %}{% include "public/_leaflet.html" %}{% endblock %}
 {% block content %}
 <div class="container py-4">
   <h1 class="h3 mb-3">Demo: blood availability and emergency requests <span class="badge text-bg-warning align-middle">DEMO DATA</span></h1>
@@ -17,6 +18,20 @@
       <div class="col-sm-3"><button class="btn btn-sm btn-bb w-100" type="submit">Search</button></div>
     </form>
     {% if searched %}{% include "public/_search_results.html" %}{% endif %}
+  </section>
+
+  <section class="pub-panel mb-4" id="demo-map-section">
+    <h2 class="h6 pub-panel-title">Demo map <span class="badge text-bg-warning">DEMO DATA</span></h2>
+    <div class="pub-map-wrap">
+      <div id="map" class="pub-map pub-map-demo" role="region" aria-label="Map of the fictional demo blood centre"
+           data-single="1" data-demo="1"
+           data-provider="{{ map.provider }}" data-style-url="{{ map.style_url }}" data-style-attribution="{{ map.style_attribution }}"
+           data-tile-url="{{ map.tile_url }}" data-attribution="{{ map.attribution }}"
+           data-center="{{ map.center | tojson }}" data-zoom="{{ map.zoom }}"></div>
+    </div>
+    <p class="small text-muted mt-2 mb-0"><span class="badge text-bg-warning">DEMO</span> The amber dashed pin is the
+      <strong>fictional</strong> demo centre, placed at an <strong>illustrative position</strong> (the map's Haldwani centre). It is
+      not a real location. Real blood banks and their verified locations are in the separate <a href="/find">directory</a>.</p>
   </section>
 
   <section class="pub-panel mb-4">
@@ -39,3 +54,4 @@
   </section>
 </div>
 {% endblock %}
+{% block scripts %}{% include "public/_map_scripts.html" %}{% endblock %}

@@ -18,7 +18,34 @@
     return node;
   }
 
+  // Fictional demo centre (/demo only): name, DEMO DATA label, illustrative-position note, synthetic whole-blood
+  // stock and links into the demo request flow.
+  function demoPopup(f) {
+    const box = el("div", { class: "pub-popup pub-popup-demo" });
+    const title = el("div", { class: "pub-popup-title" }, `${f.name} `);
+    title.append(el("span", { class: "badge text-bg-warning" }, "DEMO DATA"));
+    box.append(title, el("div", { class: "small text-muted mb-1" }, f.position_note));
+    if (f.current && f.whole_blood.length) {
+      box.append(el("div", { class: "small fw-semibold" }, "Synthetic whole-blood stock (bags):"));
+      const ul = el("ul", { class: "small" });
+      f.whole_blood.forEach((s) => {
+        const qty = s.units === null ? (s.status === "not_available" ? "none" : s.status) : String(s.units);
+        ul.append(el("li", {}, `${s.group}: ${qty}`));
+      });
+      box.append(ul);
+    } else {
+      box.append(el("div", { class: "small" }, "No current demo stock report."));
+    }
+    box.append(el("div", { class: "small text-muted" }, "Not a reservation. Fictional data for teaching only."));
+    const actions = el("div", { class: "d-flex flex-wrap gap-1 mt-2" });
+    actions.append(el("a", { class: "btn btn-sm btn-bb", href: f.request_url }, "Demo request"));
+    actions.append(el("a", { class: "btn btn-sm btn-outline-secondary text-dark", href: f.search_url }, "All demo stock"));
+    box.append(actions);
+    return box;
+  }
+
   function popupContent(f) {
+    if (f.demo) return demoPopup(f);
     const box = el("div", { class: "pub-popup" });
     box.append(el("div", { class: "pub-popup-title" }, f.name));
     if (f.address) box.append(el("div", { class: "small text-muted mb-1" }, f.address));
@@ -81,13 +108,24 @@
   // canvas from that cached measurement. When only the container changes (split panels, column or scrollbar
   // changes, the demo banner wrapping), the cache goes stale and tiles cover just part of the map.
   // Re-measure whenever the container itself changes size; invalidateSize() is a no-op if nothing changed.
+  // After a container resize, re-fit the pins (refit) until the visitor has touched the map; otherwise the
+  // top-left corner stays fixed and a single pin drifts off-centre (seen at phone widths on /demo).
+  let refit = null;
+  let userMoved = false;
+  ["pointerdown", "wheel", "keydown", "touchstart"].forEach((ev) =>
+    mapEl && mapEl.addEventListener(ev, () => { userMoved = true; }, { passive: true }));
+
   function keepSizeInSync(m) {
     if (!("ResizeObserver" in window)) return;
     let queued = false;
     new ResizeObserver(() => {
       if (queued) return;
       queued = true;
-      requestAnimationFrame(() => { queued = false; m.invalidateSize({ pan: false }); });
+      requestAnimationFrame(() => {
+        queued = false;
+        m.invalidateSize({ pan: false });
+        if (refit && !userMoved) refit();
+      });
     }).observe(mapEl);
   }
 
@@ -115,18 +153,22 @@
 
     const icon = L.divIcon({ className: "", html: '<div class="pub-pin"><i class="bi bi-droplet-fill"></i></div>',
       iconSize: [30, 30], iconAnchor: [15, 30], popupAnchor: [0, -28] });
+    const demoIcon = L.divIcon({ className: "", html: '<div class="pub-pin-demo"><span>DEMO</span></div>',
+      iconSize: [34, 34], iconAnchor: [17, 34], popupAnchor: [0, -30] });
     const pts = [];
     facilities.forEach((f) => {
       if (f.lat === null || f.lon === null || f.lat === undefined) return;   // unverified: no pin, ever
-      const m = L.marker([f.lat, f.lon], { icon, title: f.name, alt: f.name, keyboard: true })
+      const label = f.demo ? `${f.name} (DEMO, illustrative position)` : f.name;
+      const m = L.marker([f.lat, f.lon], { icon: f.demo ? demoIcon : icon, title: label, alt: label, keyboard: true })
         .addTo(map).bindPopup(() => popupContent(f));
       m.on("click", () => highlight(f.slug));
       markers.set(f.slug, m);
       pts.push([f.lat, f.lon]);
     });
 
-    if (pts.length === 1) map.setView(pts[0], mapEl.dataset.single ? 16 : 15);
-    else if (pts.length > 1) map.fitBounds(pts, { padding: [40, 40], maxZoom: 15 });
+    if (pts.length === 1) refit = () => map.setView(pts[0], mapEl.dataset.single ? 16 : 15);
+    else if (pts.length > 1) refit = () => map.fitBounds(pts, { padding: [40, 40], maxZoom: 15 });
+    if (refit) refit();
     else if (!mapEl.dataset.single) {
       mapEl.append(el("div", { class: "pub-map-notice" },
         "No blood bank location has been verified yet, so there are no pins. The map shows Haldwani for orientation only."));

@@ -233,6 +233,7 @@ class SearchRow:
     low: bool
     updated_at: datetime | None  # time of the report the status is based on (None: no report)
     is_demo: bool
+    simulated: bool = False      # /demo only: fixed synthetic component figure (app/services/demo_stock.py)
 
     @property
     def product_label(self) -> str:

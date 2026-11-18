@@ -15,6 +15,7 @@ from app.models.enums import REQUESTABLE_PRODUCTS
 from app.routers.public import _render
 from app.schemas.forms import PublicRequestIn
 from app.services import availability as avail
+from app.services import demo_stock
 from app.services import public_requests as prsvc
 from app.services.errors import ServiceError
 from app.services.ratelimit import SUBMISSIONS, TRACKING, client_key
@@ -39,15 +40,20 @@ def hub(request: Request, group: str = "", component: str = "", db: Session = De
     _require_demo()
     sel_group = BloodGroup(group) if group in BloodGroup else None
     sel_product = Product(component) if component in REQUESTABLE_PRODUCTS else None
-    rows = []
-    if sel_group or sel_product:
-        groups = [sel_group] if sel_group else list(BloodGroup)
-        products = [sel_product] if sel_product else list(REQUESTABLE_PRODUCTS)
-        for f in prsvc.eligible_facilities(db):
-            rows += avail.search_rows(avail.demo_view(db, f), f.display_name, None, True, groups, products)
-        rows.sort(key=lambda r: avail.STATUS_ORDER[r.status])
+    rows, markers = [], []
+    groups = [sel_group] if sel_group else list(BloodGroup)
+    products = [sel_product] if sel_product else list(REQUESTABLE_PRODUCTS)
+    for f in prsvc.eligible_facilities(db):
+        view = avail.demo_view(db, f)
+        if (marker := demo_stock.map_marker(f, view)) is not None:
+            markers.append(marker)
+        if sel_group or sel_product:
+            rows += demo_stock.overlay(
+                avail.search_rows(view, f.display_name, None, True, groups, products), view)
+    rows.sort(key=lambda r: avail.STATUS_ORDER[r.status])
     return _render(request, "public/demo/hub.html", {**_ctx(db), "rows": rows, "group": sel_group,
-                                                      "component": sel_product, "searched": bool(sel_group or sel_product)})
+                                                      "component": sel_product, "searched": bool(sel_group or sel_product),
+                                                      "map_data": markers})
 
 
 @router.get("/request")

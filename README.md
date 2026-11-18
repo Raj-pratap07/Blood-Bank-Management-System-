@@ -55,8 +55,9 @@ the app anywhere other than your own machine.
 ```bash
 pytest -q
 ```
-There are 623 tests (623 passed on 18 Nov 2026; the full run takes about 12 minutes because of
-password hashing). They use a temporary database per test and never touch `bloodbank.db`.
+There are 639 tests (639 passed on 18 Nov 2026; the full run takes about 12 minutes because of
+password hashing). `tests/test_demo_experience.py` covers the result cards, the demo map pin, the fixed
+simulated stock and real/demo separation. They use a temporary database per test and never touch `bloodbank.db`.
 Phase 6 is covered by `tests/test_public_requests.py`: submission, tracking, staff decisions, facility
 isolation, rate limits, the four search statuses, and migration v5 on both a fresh database and a
 simulated v4 database. Run it alone with `pytest -q tests/test_public_requests.py`.
@@ -583,8 +584,8 @@ combination gets exactly one status:
 | **Not reported** | There is no current report: never published, withdrawn, visibility hidden, facility not participating, or the component is not tracked. | — |
 
 - **"Not reported" never means zero stock.** Missing data is never shown as zero.
-- **Whole blood only.** Packed red cells, platelets and plasma always show *Not reported*, because the
-  inventory tracks whole blood only.
+- **Whole blood only.** Packed red cells, platelets and plasma show *Not reported*, because the
+  inventory tracks whole blood only. The one exception is the fixed simulated figures on `/demo`, described below.
 - **Ordering.** Results are sorted Available, Unavailable, Stale, Not reported.
 - **Real facilities.** None of the Haldwani facilities in the directory publishes stock through this
   system: they are not participating and their visibility is `hidden`. On `/find` they therefore show
@@ -593,6 +594,21 @@ combination gets exactly one status:
 - **Demo facility.** On the Render demo, the builder publishes the demo facility's synthetic stock with
   exact figures. That data appears **only** on `/demo`. `/find` and `/api/public/*` never show the demo
   facility or any request.
+- **Simulated components (`/demo` only).** On `/demo`, packed red cells, platelets and plasma show **fixed
+  simulated figures**, including zero-stock examples. They come from `app/services/demo_stock.py`:
+  - They are constants, so every build and every page load shows the same values.
+  - They are never written to the database.
+  - They are applied only to the fictional demo facility, only while its report is current.
+  - Each figure is labelled **DEMO DATA** and "simulated".
+  - These components cannot be issued: only whole blood is held in inventory.
+- **Results layout.** Results are shown as cards, not a wide table. On a narrow panel they stack in one
+  column, so the quantity is always visible without horizontal scrolling.
+- **Demo map.** `/demo` shows one amber, dashed **DEMO** pin for the fictional centre.
+  - The centre has no real location. The pin sits at the map's configured default Haldwani centre
+    (`map_default_center` in `app/config.py`) and is labelled as an **illustrative position, not a real location**.
+  - Clicking the pin shows the centre's synthetic whole-blood stock and a link to the demo request form.
+  - Real facilities have no verified coordinates yet, so `/find` still shows no pins. The demo pin never
+    appears there.
 
 #### 2. Public emergency request form (`/demo/request`)
 There is no sign-in. Every field is checked on the server:
