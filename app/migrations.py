@@ -36,6 +36,10 @@ Version history
    aggregate-only availability snapshots; append-only except a single withdrawal),
    and first-login credential fields on users (must_change_password,
    password_set_at, setup_token_hash, setup_token_expires_at). Additive only.
+5  Phase 6: public_requests (anonymous emergency requests; reference + hashed tracking code, no patient
+   identity) and public_request_events (append-only audit trail). Triggers: only a participating facility can
+   receive a request; facility, reference and tracking hash are immutable; a linked staff request and every
+   audit event must belong to the same facility; requests cannot be deleted. Additive only.
 """
 from __future__ import annotations
 
@@ -48,7 +52,7 @@ from sqlalchemy.engine import Engine
 
 log = logging.getLogger("bloodbank.migrations")
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
@@ -361,8 +365,89 @@ def _v4_availability_and_credentials(conn: sqlite3.Connection) -> None:
         conn.execute(ddl)
 
 
+_V5_DDL = [
+    """CREATE TABLE IF NOT EXISTS public_requests (
+        id INTEGER NOT NULL,
+        reference VARCHAR(16) NOT NULL,
+        token_hash VARCHAR(64) NOT NULL,
+        facility_id INTEGER NOT NULL,
+        blood_group VARCHAR(32) NOT NULL,
+        product VARCHAR(32) NOT NULL,
+        units INTEGER NOT NULL,
+        required_by DATETIME NOT NULL,
+        location VARCHAR(150) NOT NULL,
+        requester_name VARCHAR(120) NOT NULL,
+        contact_phone VARCHAR(20) NOT NULL,
+        note VARCHAR(500),
+        status VARCHAR(32) NOT NULL,
+        public_message VARCHAR(500),
+        blood_request_id INTEGER,
+        created_at DATETIME NOT NULL,
+        updated_at DATETIME NOT NULL,
+        PRIMARY KEY (id),
+        CONSTRAINT ck_public_request_units CHECK (units >= 1 AND units <= 10),
+        FOREIGN KEY(facility_id) REFERENCES facilities (id),
+        UNIQUE (blood_request_id),
+        FOREIGN KEY(blood_request_id) REFERENCES blood_requests (id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_public_requests_created_at ON public_requests (created_at)",
+    "CREATE INDEX IF NOT EXISTS ix_public_requests_status ON public_requests (status)",
+    "CREATE INDEX IF NOT EXISTS ix_public_requests_facility_id ON public_requests (facility_id)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS ix_public_requests_reference ON public_requests (reference)",
+    """CREATE TABLE IF NOT EXISTS public_request_events (
+        id INTEGER NOT NULL,
+        public_request_id INTEGER NOT NULL,
+        facility_id INTEGER NOT NULL,
+        actor_id INTEGER,
+        action VARCHAR(32) NOT NULL,
+        to_status VARCHAR(32) NOT NULL,
+        note VARCHAR(500),
+        created_at DATETIME NOT NULL,
+        PRIMARY KEY (id),
+        FOREIGN KEY(public_request_id) REFERENCES public_requests (id),
+        FOREIGN KEY(facility_id) REFERENCES facilities (id),
+        FOREIGN KEY(actor_id) REFERENCES users (id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_public_request_events_facility_id ON public_request_events (facility_id)",
+    "CREATE INDEX IF NOT EXISTS ix_public_request_events_public_request_id ON public_request_events (public_request_id)",
+    # Only a participating facility (never a non-participating real directory entry) can receive a request.
+    """CREATE TRIGGER IF NOT EXISTS trg_public_requests_participating BEFORE INSERT ON public_requests
+       WHEN (SELECT is_participating FROM facilities WHERE id = NEW.facility_id) IS NOT 1
+       BEGIN SELECT RAISE(ABORT, 'public requests can only be sent to a participating facility'); END""",
+    """CREATE TRIGGER IF NOT EXISTS trg_public_requests_immutable
+       BEFORE UPDATE OF facility_id, reference, token_hash ON public_requests
+       WHEN NEW.facility_id IS NOT OLD.facility_id OR NEW.reference IS NOT OLD.reference
+         OR NEW.token_hash IS NOT OLD.token_hash
+       BEGIN SELECT RAISE(ABORT, 'public request facility, reference and tracking code cannot be changed'); END""",
+    """CREATE TRIGGER IF NOT EXISTS trg_public_requests_link_ins BEFORE INSERT ON public_requests
+       WHEN NEW.blood_request_id IS NOT NULL
+        AND (SELECT facility_id FROM blood_requests WHERE id = NEW.blood_request_id) IS NOT NEW.facility_id
+       BEGIN SELECT RAISE(ABORT, 'cross-facility: linked request belongs to another facility'); END""",
+    """CREATE TRIGGER IF NOT EXISTS trg_public_requests_link_upd BEFORE UPDATE OF blood_request_id ON public_requests
+       WHEN NEW.blood_request_id IS NOT NULL
+        AND (SELECT facility_id FROM blood_requests WHERE id = NEW.blood_request_id) IS NOT NEW.facility_id
+       BEGIN SELECT RAISE(ABORT, 'cross-facility: linked request belongs to another facility'); END""",
+    """CREATE TRIGGER IF NOT EXISTS trg_public_requests_no_delete BEFORE DELETE ON public_requests
+       BEGIN SELECT RAISE(ABORT, 'public requests are kept for the audit trail'); END""",
+    """CREATE TRIGGER IF NOT EXISTS trg_public_request_events_same_facility BEFORE INSERT ON public_request_events
+       WHEN (SELECT facility_id FROM public_requests WHERE id = NEW.public_request_id) IS NOT NEW.facility_id
+         OR (NEW.actor_id IS NOT NULL AND (SELECT facility_id FROM users WHERE id = NEW.actor_id) IS NOT NEW.facility_id)
+       BEGIN SELECT RAISE(ABORT, 'cross-facility: audit event belongs to another facility'); END""",
+    """CREATE TRIGGER IF NOT EXISTS trg_public_request_events_no_update BEFORE UPDATE ON public_request_events
+       BEGIN SELECT RAISE(ABORT, 'public_request_events is append-only'); END""",
+    """CREATE TRIGGER IF NOT EXISTS trg_public_request_events_no_delete BEFORE DELETE ON public_request_events
+       BEGIN SELECT RAISE(ABORT, 'public_request_events is append-only'); END""",
+]
+
+
+def _v5_public_requests(conn: sqlite3.Connection) -> None:
+    for ddl in _V5_DDL:
+        conn.execute(ddl)
+
+
 STEPS: dict[int, Callable[[sqlite3.Connection], None]] = {
-    1: _v1_rejected_by, 2: _v2_facilities, 3: _v3_facility_isolation, 4: _v4_availability_and_credentials}
+    1: _v1_rejected_by, 2: _v2_facilities, 3: _v3_facility_isolation, 4: _v4_availability_and_credentials,
+    5: _v5_public_requests}
 
 
 def upgrade(engine: Engine) -> int:

@@ -24,6 +24,7 @@
       <ul class="navbar-nav ms-auto align-items-md-center gap-md-1">
         <li class="nav-item"><a class="nav-link {% if path == '/find' or (path.startswith('/find/') and path != '/find/about-data') %}active{% endif %}" href="/find">Find blood banks</a></li>
         <li class="nav-item"><a class="nav-link {% if path == '/find/about-data' %}active{% endif %}" href="/find/about-data">About the data</a></li>
+        {% if settings.demo_mode %}<li class="nav-item"><a class="nav-link {% if path.startswith('/demo') %}active{% endif %}" href="/demo">Demo <span class="badge text-bg-warning">DEMO</span></a></li>{% endif %}
         <li class="nav-item ms-md-2"><a class="btn btn-sm btn-outline-secondary" href="/login"><i class="bi bi-person-lock"></i> Staff sign in</a></li>
       </ul>
     </div>

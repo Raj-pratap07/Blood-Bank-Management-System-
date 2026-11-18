@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Annotated, Literal
 
 from pydantic import (
@@ -15,7 +15,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.models.enums import BloodGroup, Gender, RequestPriority, Role, TestResult
+from app.models.enums import BloodGroup, Gender, Product, RequestPriority, Role, TestResult
 from app.utils import business_today
 
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=120)]
@@ -218,3 +218,54 @@ class IssueIn(FormModel):
         if not v:
             raise ValueError("Confirm that the laboratory crossmatch is compatible before issuing.")
         return v
+
+
+# ---------------------------------------------------------------- public requests (Phase 6)
+class PublicRequestIn(FormModel):
+    """Anonymous emergency request. Deliberately no patient identity: staff collect it when accepting."""
+    facility_id: int
+    blood_group: BloodGroup
+    product: Product
+    units: int = Field(ge=1, le=10)
+    required_by: datetime
+    location: Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=150)]
+    requester_name: Name
+    contact_phone: str
+    note: Annotated[str | None, StringConstraints(strip_whitespace=True, max_length=500)] = None
+
+    _phone_ok = field_validator("contact_phone")(_phone)
+
+    @field_validator("product")
+    @classmethod
+    def _requestable(cls, v: Product) -> Product:
+        from app.models.enums import REQUESTABLE_PRODUCTS
+        if v not in REQUESTABLE_PRODUCTS:
+            raise ValueError("Choose whole blood, packed red cells, platelets or plasma.")
+        return v
+
+    @field_validator("required_by")
+    @classmethod
+    def _when(cls, v: datetime) -> datetime:
+        from app.utils import business_tz, to_utc, utcnow
+        if v.tzinfo is None:                      # <input type="datetime-local"> is business (IST) local time
+            v = v.replace(tzinfo=business_tz())
+        v = to_utc(v)
+        now = utcnow()
+        if v < now - timedelta(minutes=10):
+            raise ValueError("Required-by time cannot be in the past.")
+        if v > now + timedelta(days=30):
+            raise ValueError("Required-by time must be within the next 30 days.")
+        return v
+
+
+class PublicAcceptIn(FormModel):
+    """Patient details collected by authorised staff (e.g. by phone) when accepting a public request."""
+    patient_name: Name
+    patient_age: int = Field(ge=0, le=120)
+    patient_gender: Gender
+    priority: RequestPriority
+
+
+class PublicDecisionIn(FormModel):
+    """Message shown to the requester on the tracking page (no patient details)."""
+    message: Annotated[str, StringConstraints(strip_whitespace=True, min_length=5, max_length=500)]

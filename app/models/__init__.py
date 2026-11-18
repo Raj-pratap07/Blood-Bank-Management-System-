@@ -15,6 +15,7 @@ from app.models.enums import (
     OperationalStatus,
     Ownership,
     Product,
+    PublicRequestStatus,
     RequestPriority,
     RequestStatus,
     Role,
@@ -27,6 +28,7 @@ from app.models.enums import (
     VerificationStatus,
 )
 from app.models.facility import Facility, FacilityContact, FacilitySource, FacilityVerification
+from app.models.public_request import PublicRequest, PublicRequestEvent
 from app.models.user import User
 
 __all__ = [
@@ -34,6 +36,6 @@ __all__ = [
     "FACILITY_ROLES", "OPEN_REQUEST_STATUSES", "SCREENING_MARKERS", "BloodGroup", "BloodRequest",
     "BloodUnit", "ContactKind", "Donation", "DonationStatus", "Donor", "Facility", "FacilityContact",
     "FacilitySource", "FacilityVerification", "Gender", "Issue", "OperationalStatus", "Ownership",
-    "Product", "RequestPriority", "RequestStatus", "Role", "SourceType", "StockVisibility", "TestResult",
+    "Product", "PublicRequest", "PublicRequestEvent", "PublicRequestStatus", "RequestPriority", "RequestStatus", "Role", "SourceType", "StockVisibility", "TestResult",
     "UnitStatus", "User", "VerificationMethod", "VerificationScope", "VerificationStatus",
 ]

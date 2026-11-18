@@ -23,11 +23,17 @@ from app.services.tx import transaction
 from app.utils import utcnow, business_today
 
 
-def create_request(db: Session, data: BloodRequestIn, actor: User) -> BloodRequest:
+def new_request(db: Session, data: BloodRequestIn, actor: User) -> BloodRequest:
+    """Add a PENDING staff request to the session (the caller owns the transaction)."""
     fid = facility_id_of(actor)                     # never taken from the submitted form
+    req = BloodRequest(**data.model_dump(), facility_id=fid, status=RequestStatus.PENDING, created_by=actor)
+    db.add(req)
+    return req
+
+
+def create_request(db: Session, data: BloodRequestIn, actor: User) -> BloodRequest:
     with transaction(db):
-        req = BloodRequest(**data.model_dump(), facility_id=fid, status=RequestStatus.PENDING, created_by=actor)
-        db.add(req)
+        req = new_request(db, data, actor)
     return req
 
 

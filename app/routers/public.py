@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models import TRACKED_PRODUCTS, AvailabilityStatus, BloodGroup, Product
+from app.services import availability as avail
 from app.services import public as pub
 from app.utils import iso_utc
 from app.web import templates
@@ -62,7 +63,7 @@ def landing(request: Request, db: Session):
 
 def _filters(group: str, component: str, facility: str, facilities):
     sel_group = BloodGroup(group) if group in BloodGroup else None
-    sel_product = Product(component) if component in Product else None
+    sel_product = Product(component) if component in avail.SEARCH_PRODUCTS else None
     slugs = {f.slug for f in facilities}
     sel_facility = facility if facility in slugs else None
     invalid = bool((group and not sel_group) or (component and not sel_product) or (facility and not sel_facility))
@@ -81,21 +82,17 @@ def directory(request: Request, group: str = "", component: str = "", facility: 
     shown = [f for f in facilities if not sel_facility or f.slug == sel_facility]
     views = {f.slug: pub.availability(db, f) for f in shown}
     filtering = bool(sel_group or sel_product)
-    results = []                                         # (facility, cell) for current publications only
+    rows = []                                            # every facility x group x component, honest status
     if filtering:
-        product = sel_product or Product.WHOLE_BLOOD
+        groups = [sel_group] if sel_group else list(BloodGroup)
+        products = [sel_product] if sel_product else list(avail.SEARCH_PRODUCTS)
         for f in shown:
-            v = views[f.slug]
-            if not v.is_current:
-                continue
-            for g in ([sel_group] if sel_group else list(BloodGroup)):
-                c = v.cell(g, product)
-                if c and c.status in (AvailabilityStatus.AVAILABLE, AvailabilityStatus.LOW):
-                    results.append((f, c))
+            rows += avail.search_rows(views[f.slug], f.name, f.slug, False, groups, products)
+        rows.sort(key=lambda r: avail.STATUS_ORDER[r.status])
     return _render(request, "public/directory.html", {
         "facilities": shown, "all_facilities": facilities, "views": views, "filtering": filtering,
-        "results": results, "group": sel_group, "component": sel_product, "facility_filter": sel_facility,
-        "tracked": TRACKED_PRODUCTS, "groups": [g.value for g in BloodGroup], "components": list(Product),
+        "rows": rows, "group": sel_group, "component": sel_product, "facility_filter": sel_facility,
+        "tracked": TRACKED_PRODUCTS, "groups": [g.value for g in BloodGroup], "components": list(avail.SEARCH_PRODUCTS),
         "invalid_filter": invalid, "map_data": [f.to_json() for f in shown],
         "candidates": [] if sel_facility else pub.candidate_facilities(db),
         "any_current": any(v.is_current for v in pub_views_all(db, facilities)),

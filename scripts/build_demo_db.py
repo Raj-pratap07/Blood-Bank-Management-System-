@@ -35,6 +35,7 @@ from app.config import BASE_DIR, settings
 from app.database import engine, init_db
 from app.models import (AvailabilityPublication, BloodRequest, BloodUnit, Donation, Donor, Facility, Issue, Role,
                         StockVisibility, User, VerificationScope)
+from app.services import availability
 from app.services import facilities as fsvc
 from app.utils import business_today
 from scripts import load_facilities
@@ -170,6 +171,11 @@ def build(eng=None) -> dict:
     with Session() as db:
         Seeder(db, business_today(), accounts=accounts).run()
     _mark_as_demo(eng)
+    with Session() as db:     # the FICTIONAL demo facility publishes its synthetic stock (exact figures) for /demo
+        admin = db.scalar(select(User).where(User.username == "demo.admin"))
+        doctor = db.scalar(select(User).where(User.username == "demo.doctor"))
+        availability.update_settings(db, admin, StockVisibility.EXACT, settings.availability_max_hours)
+        availability.publish(db, doctor)
 
     rc = load_facilities.run(FACILITIES_FILE, "demo.platform", apply=True, eng=eng, backup=False, expired="unlist")
     if rc != 0:

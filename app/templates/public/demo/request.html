@@ -1,0 +1,40 @@
+{% extends "public/base.html" %}
+{% block title %}Demo: submit an emergency request{% endblock %}
+{% block content %}
+<div class="container py-4" style="max-width: 760px">
+  <h1 class="h3 mb-3">Submit a demo emergency request <span class="badge text-bg-warning align-middle">DEMO DATA</span></h1>
+  {% include "public/demo/_notice.html" %}
+  {% if errors.__all__ %}<div class="alert alert-danger small">{{ errors.__all__ }}</div>{% endif %}
+  {% if not demo_facilities %}<p>No demo blood centre is accepting requests right now.</p>{% else %}
+  {% macro err(name) %}{% if errors[name] %}<div class="text-danger small" data-error="{{ name }}">{{ errors[name] }}</div>{% endif %}{% endmacro %}
+  <form method="post" action="/demo/request" class="row g-3" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+    <div class="col-12"><label class="form-label" for="facility_id">Blood centre</label>
+      <select class="form-select" id="facility_id" name="facility_id">
+        {% for f in demo_facilities %}<option value="{{ f.id }}" {% if form.facility_id == f.id|string %}selected{% endif %}>{{ f.display_name }} (DEMO)</option>{% endfor %}</select>{{ err('facility_id') }}</div>
+    <div class="col-sm-4"><label class="form-label" for="blood_group">Blood group</label>
+      <select class="form-select" id="blood_group" name="blood_group"><option value="">Choose...</option>
+        {% for g in groups %}<option value="{{ g.value }}" {% if form.blood_group == g.value %}selected{% endif %}>{{ g.value }}</option>{% endfor %}</select>{{ err('blood_group') }}</div>
+    <div class="col-sm-5"><label class="form-label" for="product">Component</label>
+      <select class="form-select" id="product" name="product">
+        {% for c in components %}<option value="{{ c.value }}" {% if form.product == c.value %}selected{% endif %}>{{ c.label }}</option>{% endfor %}</select>{{ err('product') }}
+      <div class="form-text">Only whole blood can be fulfilled from this demo centre's inventory.</div></div>
+    <div class="col-sm-3"><label class="form-label" for="units">Quantity (bags)</label>
+      <input class="form-control" type="number" min="1" max="10" id="units" name="units" value="{{ form.units or '' }}">{{ err('units') }}</div>
+    <div class="col-sm-6"><label class="form-label" for="required_by">Required by (IST)</label>
+      <input class="form-control" type="datetime-local" id="required_by" name="required_by" value="{{ form.required_by or '' }}">{{ err('required_by') }}</div>
+    <div class="col-sm-6"><label class="form-label" for="location">Hospital / location</label>
+      <input class="form-control" id="location" name="location" maxlength="150" value="{{ form.location or '' }}">{{ err('location') }}</div>
+    <div class="col-sm-6"><label class="form-label" for="requester_name">Your name</label>
+      <input class="form-control" id="requester_name" name="requester_name" maxlength="120" value="{{ form.requester_name or '' }}">{{ err('requester_name') }}</div>
+    <div class="col-sm-6"><label class="form-label" for="contact_phone">Contact number</label>
+      <input class="form-control" id="contact_phone" name="contact_phone" maxlength="20" value="{{ form.contact_phone or '' }}">{{ err('contact_phone') }}
+      <div class="form-text">Not verified. Staff may call this number. Use a fictional number in this demo.</div></div>
+    <div class="col-12"><label class="form-label" for="note">Note (optional, no patient names or medical details)</label>
+      <textarea class="form-control" id="note" name="note" maxlength="500" rows="2">{{ form.note or '' }}</textarea>{{ err('note') }}</div>
+    <div class="col-12"><button class="btn btn-bb" type="submit">Submit demo request</button>
+      <span class="small text-muted ms-2">This does not reserve or guarantee blood.</span></div>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

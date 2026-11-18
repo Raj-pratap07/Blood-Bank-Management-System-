@@ -65,32 +65,13 @@
         <div class="pub-availability mt-3" role="status">
           <div class="fw-semibold mb-1"><i class="bi bi-clipboard2-pulse"></i>
             {{ group.value if group else 'Any group' }} · {{ component.label if component else 'any component' }}</div>
-          {% if component and component not in tracked %}
-          <p class="small mb-2">Blood banks on this site currently publish <strong>whole blood</strong> only.
-            {{ component.label }} isn't tracked here. Please call the blood banks below, or check
-            <a href="{{ eraktkosh_url }}" target="_blank" rel="noopener">e-RaktKosh</a>.</p>
-          {% elif results %}
-          <ul class="list-unstyled mb-2 pub-results">
-            {% for f, c in results %}
-            <li class="d-flex flex-wrap justify-content-between gap-2 py-1 border-bottom">
-              <span><a href="/find/{{ f.slug }}" class="fw-semibold">{{ f.name }}</a> · {{ c.blood_group }}</span>
-              <span>{{ p.status_chip(c) }} <span class="small text-muted">updated {{ views[f.slug].published_at | ist }}</span></span>
-            </li>
-            {% endfor %}
-          </ul>
-          <p class="small text-muted mb-0"><i class="bi bi-exclamation-triangle"></i> {{ notice }}</p>
-          {% elif not any_current %}
+          {% if not any_current %}
           <p class="small mb-2">{{ no_stock_message }}</p>
           <a class="btn btn-sm btn-bb mb-2" href="{{ eraktkosh_url }}" target="_blank" rel="noopener">
             <i class="bi bi-box-arrow-up-right"></i> Check stock on e-RaktKosh (official)</a>
-          {% else %}
-          <p class="small mb-2">No participating blood bank currently reports this as available. That does not
-            mean none is available: other blood banks do not publish here. Call a blood bank, or check the official
-            <a href="{{ eraktkosh_url }}" target="_blank" rel="noopener">e-RaktKosh</a> portal.</p>
           {% endif %}
-          {% if not results and not (component and component not in tracked) %}
+          {% include "public/_search_results.html" %}
           <p class="small text-muted mb-0">Only current figures published by the blood banks themselves are shown. We never estimate stock.</p>
-          {% endif %}
         </div>
         {% endif %}
 

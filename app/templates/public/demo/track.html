@@ -1,0 +1,17 @@
+{% extends "public/base.html" %}
+{% block title %}Demo: track a request{% endblock %}
+{% block content %}
+<div class="container py-4" style="max-width: 560px">
+  <h1 class="h3 mb-3">Track a demo request <span class="badge text-bg-warning align-middle">DEMO DATA</span></h1>
+  {% if error %}<div class="alert alert-danger small">{{ error }}</div>{% endif %}
+  <form method="post" action="/demo/track" class="row g-3" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+    <div class="col-12"><label class="form-label" for="reference">Request reference</label>
+      <input class="form-control" id="reference" name="reference" maxlength="20" value="{{ reference }}" placeholder="PR-XXXXXX"></div>
+    <div class="col-12"><label class="form-label" for="code">Tracking code</label>
+      <input class="form-control" id="code" name="code" maxlength="40" type="password" placeholder="XXXX-XXXX-XXXX-XXXX"></div>
+    <div class="col-12"><button class="btn btn-bb" type="submit">Check status</button></div>
+  </form>
+  <p class="small text-muted mt-3">Both the reference and the tracking code are required. Other people's requests cannot be listed or viewed.</p>
+</div>
+{% endblock %}

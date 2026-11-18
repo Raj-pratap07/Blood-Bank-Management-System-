@@ -1,0 +1,20 @@
+{% extends "public/base.html" %}
+{% block title %}Demo request received{% endblock %}
+{% block content %}
+<div class="container py-4" style="max-width: 760px">
+  <h1 class="h3 mb-3">Demo request received <span class="badge text-bg-warning align-middle">DEMO DATA</span></h1>
+  {% include "public/demo/_notice.html" %}
+  <div class="pub-panel mb-3">
+    <p class="mb-2">Keep both of these. You need <strong>both</strong> to check the status.</p>
+    <dl class="row mb-0">
+      <dt class="col-sm-4">Request reference</dt><dd class="col-sm-8"><code class="fs-5" id="reference">{{ req.reference }}</code></dd>
+      <dt class="col-sm-4">Tracking code</dt><dd class="col-sm-8"><code class="fs-5" id="tracking-code">{{ token }}</code></dd>
+    </dl>
+    <p class="small text-danger mt-2 mb-0"><strong>The tracking code is shown only once.</strong> Only a hashed form of it is
+      stored, so it cannot be shown or recovered later.</p>
+  </div>
+  <p class="small">Status: <strong>Received</strong>. This request does <strong>not</strong> reserve or guarantee blood.</p>
+  <a class="btn btn-sm btn-bb" href="/demo/track">Track this request</a>
+  <a class="btn btn-sm btn-outline-secondary" href="/demo">Back to the demo</a>
+</div>
+{% endblock %}

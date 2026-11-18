@@ -181,6 +181,22 @@ def public_view(db: Session, facility: Facility, now: datetime | None = None,
             or facility.operational_status == OperationalStatus.CLOSED
             or facility.stock_visibility == StockVisibility.HIDDEN):
         return PublicAvailability("off")
+    return _snapshot_view(db, facility, now, on)
+
+
+def demo_view(db: Session, facility: Facility, now: datetime | None = None,
+              on: date | None = None) -> PublicAvailability:
+    """The fictional demo facility's published SYNTHETIC availability, for the /demo pages only.
+
+    Never used by /find or the public API (public_view still refuses demo facilities). Only in demo mode.
+    """
+    if (not settings.demo_mode or not facility.is_demo or not facility.is_participating
+            or facility.stock_visibility == StockVisibility.HIDDEN):
+        return PublicAvailability("off")
+    return _snapshot_view(db, facility, now, on)
+
+
+def _snapshot_view(db: Session, facility: Facility, now: datetime | None, on: date | None) -> PublicAvailability:
     pub = latest_publication(db, facility.id)
     state = publication_state(pub, now)
     if state != "current":
@@ -198,3 +214,58 @@ def public_view(db: Session, facility: Facility, now: datetime | None = None,
             shown = min(published.get((g, p), 0), live.get((g, p), 0))   # never overstate
             cells.append(PublicCell(g.value, p.value, _band(shown), shown if exact else None))
     return PublicAvailability("current", pub.published_at, pub.valid_until, cells)
+
+
+# ------------------------------------------------------------------ search results (Phase 6)
+from app.models.enums import REQUESTABLE_PRODUCTS as SEARCH_PRODUCTS  # noqa: E402
+UNIT_LABEL = "bags (units)"
+
+
+@dataclass
+class SearchRow:
+    """One facility x blood group x component result. Missing data is NEVER turned into zero stock."""
+    facility_name: str
+    facility_slug: str | None
+    blood_group: str
+    product: str
+    status: str                  # 'available' | 'unavailable' | 'not_reported' | 'stale'
+    units: int | None            # only from a CURRENT report with exact figures
+    low: bool
+    updated_at: datetime | None  # time of the report the status is based on (None: no report)
+    is_demo: bool
+
+    @property
+    def product_label(self) -> str:
+        return Product(self.product).label
+
+    @property
+    def quantity_text(self) -> str:
+        if self.status == "available":
+            return f"{self.units} {UNIT_LABEL}" if self.units is not None else "Available (quantity not disclosed)"
+        if self.status == "unavailable":
+            return f"0 {UNIT_LABEL}"
+        return "—"
+
+
+def search_rows(view: PublicAvailability, name: str, slug: str | None, is_demo: bool,
+                groups: list[BloodGroup], products: list[Product]) -> list[SearchRow]:
+    rows = []
+    for g in groups:
+        for p in products:
+            base = dict(facility_name=name, facility_slug=slug, blood_group=g.value, product=p.value, is_demo=is_demo)
+            if view.state == "stale":                       # an expired report: show its time, never its figures
+                rows.append(SearchRow(**base, status="stale", units=None, low=False, updated_at=view.published_at))
+                continue
+            cell = view.cell(g, p) if view.is_current else None
+            if cell is None or cell.status is None:          # no current report, or component not tracked
+                rows.append(SearchRow(**base, status="not_reported", units=None, low=False, updated_at=None))
+            elif cell.status == AvailabilityStatus.NOT_AVAILABLE:
+                rows.append(SearchRow(**base, status="unavailable", units=0 if cell.units is not None else None,
+                                      low=False, updated_at=view.published_at))
+            else:
+                rows.append(SearchRow(**base, status="available", units=cell.units,
+                                      low=cell.status == AvailabilityStatus.LOW, updated_at=view.published_at))
+    return rows
+
+STATUS_ORDER = {"available": 0, "unavailable": 1, "stale": 2, "not_reported": 3}
+STATUS_LABEL = {"available": "Available", "unavailable": "Unavailable", "not_reported": "Not reported", "stale": "Stale"}

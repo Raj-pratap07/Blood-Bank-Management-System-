@@ -1,0 +1,28 @@
+{% extends "public/base.html" %}
+{% block title %}Demo request status{% endblock %}
+{% block content %}
+<div class="container py-4" style="max-width: 760px">
+  <h1 class="h3 mb-3">Request {{ req.reference }} <span class="badge text-bg-warning align-middle">DEMO DATA</span></h1>
+  {% include "public/demo/_notice.html" %}
+  <div class="pub-panel mb-3">
+    <p class="mb-1">Status: <strong id="public-status" data-status="{{ status.key }}">{{ status.label }}</strong></p>
+    <p class="small mb-2">{{ status.detail }}</p>
+    {% if req.public_message %}<div class="alert alert-info small mb-2"><strong>Message from the blood bank:</strong> {{ req.public_message }}</div>{% endif %}
+    <dl class="row small mb-0">
+      <dt class="col-sm-4">Blood centre</dt><dd class="col-sm-8">{{ req.facility.display_name }} (DEMO)</dd>
+      <dt class="col-sm-4">Requested</dt><dd class="col-sm-8">{{ req.units }} x {{ req.product.label }}, {{ req.blood_group.value }}</dd>
+      <dt class="col-sm-4">Required by</dt><dd class="col-sm-8">{{ req.required_by | ist }}</dd>
+      <dt class="col-sm-4">Contact number</dt><dd class="col-sm-8">{{ req.masked_phone }}</dd>
+    </dl>
+  </div>
+  <h2 class="h6">Timeline</h2>
+  <ul class="small">
+    {% for e in req.events %}<li>{{ e.created_at | ist }}: {{ labels.get(e.action, e.action) }}</li>{% endfor %}
+    {% if req.blood_request %}{% set br = req.blood_request %}
+      {% if br.approved_at %}<li>{{ br.approved_at | ist }}: Medically approved</li>{% endif %}
+      {% for i in br.issues %}<li>{{ i.issued_at | ist }}: Bag issued</li>{% endfor %}
+    {% endif %}
+  </ul>
+  <a class="btn btn-sm btn-outline-secondary" href="/demo/track">Track another request</a>
+</div>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends "public/base.html" %}
+{% block title %}Demo: blood availability and requests{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h1 class="h3 mb-3">Demo: blood availability and emergency requests <span class="badge text-bg-warning align-middle">DEMO DATA</span></h1>
+  {% include "public/demo/_notice.html" %}
+
+  <section class="pub-panel mb-4">
+    <h2 class="h6 pub-panel-title">1. Search synthetic availability</h2>
+    <form class="row g-2 align-items-end mb-3" method="get" action="/demo">
+      <div class="col-sm-4"><label class="form-label small mb-1" for="group">Blood group</label>
+        <select class="form-select form-select-sm" id="group" name="group"><option value="">Any</option>
+          {% for g in groups %}<option value="{{ g.value }}" {% if group == g %}selected{% endif %}>{{ g.value }}</option>{% endfor %}</select></div>
+      <div class="col-sm-5"><label class="form-label small mb-1" for="component">Component</label>
+        <select class="form-select form-select-sm" id="component" name="component"><option value="">Any</option>
+          {% for c in components %}<option value="{{ c.value }}" {% if component == c %}selected{% endif %}>{{ c.label }}</option>{% endfor %}</select></div>
+      <div class="col-sm-3"><button class="btn btn-sm btn-bb w-100" type="submit">Search</button></div>
+    </form>
+    {% if searched %}{% include "public/_search_results.html" %}{% endif %}
+  </section>
+
+  <section class="pub-panel mb-4">
+    <h2 class="h6 pub-panel-title">2-3. Submit and track a synthetic emergency request</h2>
+    {% if demo_facilities %}
+    <a class="btn btn-sm btn-bb" href="/demo/request">Submit a demo request</a>
+    <a class="btn btn-sm btn-outline-secondary" href="/demo/track">Track a request</a>
+    {% else %}<p class="small mb-0">No demo blood centre is accepting requests right now.</p>{% endif %}
+  </section>
+
+  <section class="pub-panel">
+    <h2 class="h6 pub-panel-title">4-6. Process it as blood-bank staff</h2>
+    <ol class="small mb-0">
+      <li><a href="/login">Sign in</a> as <code>demo.staff</code> (password from your instructor) and open <strong>Public requests</strong>.</li>
+      <li>Review the request, enter the patient details and <strong>accept</strong> it: it becomes a normal staff request.</li>
+      <li>Sign in as <code>demo.doctor</code> (medical officer) to <strong>approve</strong> it: compatible bags are reserved.</li>
+      <li>As <code>demo.staff</code>, <strong>issue</strong> the reserved bags (crossmatch confirmation required).</li>
+      <li>Track the request again: it shows <strong>Fulfilled</strong>, and the synthetic stock above goes down.</li>
+    </ol>
+  </section>
+</div>
+{% endblock %}

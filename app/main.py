@@ -29,8 +29,10 @@ from app.routers import (
     auth,
     availability,
     dashboard,
+    demo,
     donations,
     donors,
+    incoming,
     inventory,
     issues,
     platform,
@@ -80,7 +82,8 @@ def create_app(init: bool = True) -> FastAPI:
     )
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "app" / "static")), name="static")
 
-    for r in (auth, dashboard, public, donors, donations, inventory, requests, issues, reports, users, api, platform, availability):
+    for r in (auth, dashboard, public, demo, donors, donations, inventory, requests, incoming, issues, reports, users, api,
+              platform, availability):
         app.include_router(r.router)
 
     @app.get("/healthz", include_in_schema=False)

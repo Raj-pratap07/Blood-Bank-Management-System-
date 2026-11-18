@@ -131,11 +131,13 @@ DATETIME_COLUMNS = {
     "facility_contacts": {"created_at"},
     "facility_verifications": {"recorded_at"},
     "users": {"created_at", "password_set_at", "setup_token_expires_at"},
+    "public_requests": {"required_by", "created_at", "updated_at"},          # Phase 6 (migration v5)
+    "public_request_events": {"created_at"},
 }
 
 
 class TestUTCDateTimeColumns:
-    def test_exactly_the_20_timestamp_columns_use_utc_type(self):
+    def test_exactly_the_24_timestamp_columns_use_utc_type(self):
         found: dict[str, set[str]] = {}
         for table in Base.metadata.tables.values():
             for col in table.columns:
@@ -143,7 +145,7 @@ class TestUTCDateTimeColumns:
                     assert isinstance(col.type, UTCDateTime), f"{table.name}.{col.name} is a plain DateTime"
                     found.setdefault(table.name, set()).add(col.name)
         assert found == DATETIME_COLUMNS
-        assert sum(len(v) for v in found.values()) == 20
+        assert sum(len(v) for v in found.values()) == 24
 
     def test_sqlite_ddl_unchanged_postgres_gets_timestamptz(self):
         ddl = str(CreateTable(User.__table__).compile(dialect=sqlite.dialect()))

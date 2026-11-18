@@ -320,8 +320,10 @@ class TestPublicDisplay:
         avail.publish(db, lima["mo"])
         r = client.get("/find?group=AB%2B&component=whole_blood").text
         assert "Lima (fictional test)" in r and "Available" in r and "updated" in r
-        assert "No participating blood bank currently reports this as available" in client.get("/find?group=O-").text
-        assert "isn't tracked here" in client.get("/find?group=A%2B&component=platelets").text
+        o_neg = client.get("/find?group=O-&component=whole_blood").text      # current report, zero bags
+        assert 'data-status="unavailable"' in o_neg and "0 bags (units)" in o_neg and 'data-status="available"' not in o_neg
+        platelets = client.get("/find?group=A%2B&component=platelets").text   # not tracked: never shown as zero
+        assert 'data-status="not_reported"' in platelets and 'data-status="unavailable"' not in platelets
         api = client.get("/api/public/availability?group=AB%2B&component=whole_blood&facility="
                          + lima["facility"].slug).json()["results"]
         assert [(i["blood_group"], i["status"]) for i in api] == [("AB+", "available")]

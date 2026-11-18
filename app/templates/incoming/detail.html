@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}{{ req.reference }}{% endblock %}
+{% block content %}
+{% set open = req.status.value in ('submitted', 'clarification_requested') %}
+{% call m.page_header("Public request " ~ req.reference, "Received " ~ (req.created_at | dt)) %}
+  {% if req.facility.is_demo %}<span class="badge text-bg-warning">DEMO DATA</span>{% endif %}
+  <span class="badge text-bg-secondary" data-status="{{ status.key }}">{{ status.label }}</span>
+{% endcall %}
+{{ m.form_error(errors) }}
+
+<div class="row g-3">
+  <div class="col-lg-5">
+    <div class="card"><div class="card-body">
+      <h2 class="h6">Request</h2>
+      <dl class="row small mb-0">
+        <dt class="col-5">Blood group</dt><dd class="col-7">{{ req.blood_group.value }}</dd>
+        <dt class="col-5">Component</dt><dd class="col-7">{{ req.product.label }}</dd>
+        <dt class="col-5">Quantity</dt><dd class="col-7">{{ req.units }} bag(s)</dd>
+        <dt class="col-5">Required by</dt><dd class="col-7">{{ req.required_by | dt }}</dd>
+        <dt class="col-5">Hospital / location</dt><dd class="col-7">{{ req.location }}</dd>
+        <dt class="col-5">Requester</dt><dd class="col-7">{{ req.requester_name }}</dd>
+        <dt class="col-5">Contact (unverified)</dt><dd class="col-7">{{ req.contact_phone }}</dd>
+        <dt class="col-5">Note</dt><dd class="col-7">{{ req.note or '—' }}</dd>
+        {% if req.public_message %}<dt class="col-5">Message to requester</dt><dd class="col-7">{{ req.public_message }}</dd>{% endif %}
+        {% if req.blood_request %}<dt class="col-5">Staff request</dt><dd class="col-7"><a href="/requests/{{ req.blood_request.id }}">{{ req.blood_request.code }}</a></dd>{% endif %}
+      </dl>
+      <h2 class="h6 mt-3">Audit trail</h2>
+      <ul class="small mb-0">{% for e in req.events %}<li>{{ e.created_at | dt }}: {{ labels.get(e.action, e.action) }}{% if e.note %} ({{ e.note }}){% endif %}</li>{% endfor %}</ul>
+    </div></div>
+  </div>
+  <div class="col-lg-7">
+    {% if open %}
+    {% if req.product.value == 'whole_blood' %}
+    <div class="card mb-3"><div class="card-body">
+      <h2 class="h6">Accept: enter the patient details (e.g. after calling the requester)</h2>
+      <form method="post" action="/incoming-requests/{{ req.id }}/accept" class="row g-2">
+        {{ m.csrf() }}
+        {{ m.field("patient_name", "Patient name", form, errors, required=true) }}
+        {{ m.field("patient_age", "Patient age", form, errors, type="number", required=true, col="col-md-3") }}
+        {{ m.select("patient_gender", "Gender", genders, form, errors, required=true, col="col-md-3") }}
+        {{ m.select("priority", "Priority", priorities, form, errors, required=true, col="col-md-6") }}
+        <div class="col-12"><button class="btn btn-primary btn-sm" type="submit">Accept as staff request</button>
+          <span class="small text-muted ms-2">Creates a PENDING request; a medical officer must approve it.</span></div>
+      </form>
+    </div></div>
+    {% else %}
+    <div class="alert alert-warning small">{{ req.product.label }} is not held in inventory here, so this request cannot be
+      fulfilled through the inventory workflow. Reject it or ask for clarification, and direct the requester elsewhere.</div>
+    {% endif %}
+    <div class="card"><div class="card-body">
+      <h2 class="h6">Reject or ask for clarification</h2>
+      <p class="small text-muted">The message is shown to the requester on the tracking page. Do not include patient details.</p>
+      {% for action, label in [("clarify", "Ask for clarification"), ("reject", "Reject")] %}
+      <form method="post" action="/incoming-requests/{{ req.id }}/{{ action }}" class="row g-2 mb-2">
+        {{ m.csrf() }}
+        <div class="col-md-9"><input class="form-control form-control-sm {% if errors.get(action ~ '_message') %}is-invalid{% endif %}"
+             name="message" maxlength="500" placeholder="Message to the requester">
+          {% if errors.get(action ~ '_message') %}<div class="invalid-feedback">{{ errors[action ~ '_message'] }}</div>{% endif %}</div>
+        <div class="col-md-3"><button class="btn btn-sm {{ 'btn-outline-danger' if action == 'reject' else 'btn-outline-secondary' }} w-100" type="submit">{{ label }}</button></div>
+      </form>
+      {% endfor %}
+    </div></div>
+    {% else %}
+    <div class="alert alert-secondary small">This request has been decided.{% if req.blood_request %} Continue in
+      <a href="/requests/{{ req.blood_request.id }}">{{ req.blood_request.code }}</a> (approval, reservation and issue).{% endif %}</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

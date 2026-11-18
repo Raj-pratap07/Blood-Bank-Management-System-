@@ -48,15 +48,56 @@
 
   // Base map: OpenFreeMap vector tiles (MapLibre GL inside Leaflet) when configured and supported,
   // otherwise the configured raster XYZ tiles. Markers and verified-location rules are identical either way.
+  function addRaster(m, tag) {
+    const d = mapEl.dataset;
+    L.tileLayer(d.tileUrl, { maxZoom: 19, attribution: d.attribution }).addTo(m);
+    mapEl.dataset.baseLayer = tag;
+  }
+
   function addBaseLayer(m) {
     const d = mapEl.dataset;
     if (d.provider === "openfreemap" && typeof L.maplibreGL === "function" && webglAvailable()) {
-      L.maplibreGL({ style: d.styleUrl, attribution: d.styleAttribution }).addTo(m);
+      const layer = L.maplibreGL({ style: d.styleUrl, attribution: d.styleAttribution }).addTo(m);
       mapEl.dataset.baseLayer = "openfreemap";
+      const gl = layer.getMaplibreMap && layer.getMaplibreMap();
+      if (gl) {
+        // The vector style, sprite and fonts can take seconds on slow connections: say so instead of a blank box.
+        mapEl.classList.add("is-loading");
+        gl.once("load", () => mapEl.classList.remove("is-loading"));
+        // If the style itself cannot be loaded, fall back to raster tiles rather than leaving the map empty.
+        gl.on("error", () => {
+          if (mapEl.dataset.baseLayer !== "openfreemap" || gl.isStyleLoaded()) return;
+          m.removeLayer(layer);
+          mapEl.classList.remove("is-loading");
+          addRaster(m, "raster-fallback");
+        });
+      }
       return;
     }
-    L.tileLayer(d.tileUrl, { maxZoom: 19, attribution: d.attribution }).addTo(m);
-    mapEl.dataset.baseLayer = "raster";
+    addRaster(m, "raster");
+  }
+
+  // Leaflet measures its container only at start-up and on WINDOW resize, and the MapLibre layer sizes its
+  // canvas from that cached measurement. When only the container changes (split panels, column or scrollbar
+  // changes, the demo banner wrapping), the cache goes stale and tiles cover just part of the map.
+  // Re-measure whenever the container itself changes size; invalidateSize() is a no-op if nothing changed.
+  function keepSizeInSync(m) {
+    if (!("ResizeObserver" in window)) return;
+    let queued = false;
+    new ResizeObserver(() => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => { queued = false; m.invalidateSize({ pan: false }); });
+    }).observe(mapEl);
+  }
+
+  // Desktop layout: list and map fill the viewport below the header. The header height varies (navbar plus
+  // the demo banner, which wraps at narrow widths), so measure it instead of assuming a fixed value.
+  function syncHeaderOffset() {
+    const dir = document.querySelector(".pub-dir");
+    if (!dir) return;
+    const top = Math.max(0, Math.round(dir.getBoundingClientRect().top + window.scrollY));
+    dir.style.setProperty("--pub-head", `${top}px`);
   }
 
   function initMap() {
@@ -65,9 +106,12 @@
       mapEl.append(el("div", { class: "pub-map-notice" }, "The map could not be loaded. The list of blood banks still works."));
       return;
     }
+    syncHeaderOffset();
+    window.addEventListener("resize", syncHeaderOffset);
     const center = JSON.parse(mapEl.dataset.center);
     map = L.map(mapEl, { scrollWheelZoom: !mapEl.dataset.single }).setView(center, Number(mapEl.dataset.zoom));
     addBaseLayer(map);
+    keepSizeInSync(map);
 
     const icon = L.divIcon({ className: "", html: '<div class="pub-pin"><i class="bi bi-droplet-fill"></i></div>',
       iconSize: [30, 30], iconAnchor: [15, 30], popupAnchor: [0, -28] });

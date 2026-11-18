@@ -224,8 +224,11 @@ class TestAvailability:
         assert "does not mean blood is unavailable" in html
         assert "We never estimate stock" in html
         assert "Test Facility Alpha" in html                     # still listed to call directly
+        # Nothing published: every row is "Not reported", never "Unavailable" (no zero inferred from missing data).
+        assert 'data-status="not_reported"' in html
+        assert 'data-status="unavailable"' not in html and 'data-status="available"' not in html
         html = client.get("/find?group=B%2B&component=platelets").text
-        assert "isn't tracked here" in html                      # untracked component: explicit, not "available"
+        assert 'data-status="not_reported"' in html and "Real facility" in html
 
     def test_invalid_filter_ignored(self, client, world):
         r = client.get("/find?group=Z%2B&component=gold")

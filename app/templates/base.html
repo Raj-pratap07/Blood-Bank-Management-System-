@@ -26,7 +26,8 @@
         {% for href, icon, label in [
             ("/", "speedometer2", "Dashboard"), ("/donors", "people", "Donors"),
             ("/donations", "droplet-half", "Donations"), ("/inventory", "box-seam", "Inventory"),
-            ("/requests", "clipboard2-pulse", "Requests"), ("/issues", "truck", "Issues"),
+            ("/requests", "clipboard2-pulse", "Requests"), ("/incoming-requests", "inbox", "Public requests"),
+            ("/issues", "truck", "Issues"),
             ("/reports", "file-earmark-bar-graph", "Reports"), ("/availability", "broadcast", "Availability")] %}
         <li class="nav-item">
           <a class="nav-link {% if (href == '/' and path == '/') or (href != '/' and path.startswith(href)) %}active{% endif %}" href="{{ href }}">

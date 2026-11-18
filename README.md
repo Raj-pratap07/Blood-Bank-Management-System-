@@ -55,7 +55,11 @@ the app anywhere other than your own machine.
 ```bash
 pytest -q
 ```
-There are 558 tests. They use a temporary database per test and never touch `bloodbank.db`.
+There are 623 tests (623 passed on 18 Nov 2026; the full run takes about 12 minutes because of
+password hashing). They use a temporary database per test and never touch `bloodbank.db`.
+Phase 6 is covered by `tests/test_public_requests.py`: submission, tracking, staff decisions, facility
+isolation, rate limits, the four search statuses, and migration v5 on both a fresh database and a
+simulated v4 database. Run it alone with `pytest -q tests/test_public_requests.py`.
 
 ---
 
@@ -74,6 +78,7 @@ Hiding buttons in the UI is never the only protection.
 | Approve a request and reserve bags; reject a request | | ✔ | ✔ |
 | Issue reserved bags of an **approved** request | ✔ | ✔ | ✔ |
 | Cancel a request | ✔ | ✔ | ✔ |
+| Review a public request: accept, reject or ask for clarification (own facility only) | ✔ | ✔ | ✔ |
 | Discard a bag; deactivate a donor | | ✔ | ✔ |
 | Create, deactivate and reset staff accounts | | | ✔ |
 
@@ -296,6 +301,7 @@ interval. These are software sanity limits, not clinical validation of the value
 
 | Version | Change |
 |---|---|
+| 5 | Phase 6. Adds two tables: `public_requests` (with indexes on reference (unique), facility, status and creation time) and `public_request_events`. Adds 8 triggers: a public request can only target a participating facility; its facility, reference and tracking-code hash cannot change; a linked staff request must belong to the same facility; public requests cannot be deleted; events must belong to the request's facility (and so must the staff actor) and are append-only. Additive only: no existing table or row changes. |
 | 4 | Directory Phase 4. Adds the `availability_publications` and `availability_entries` tables (append-only except for a single withdrawal; the publisher and the publication must belong to the same facility). Adds first-login fields to `users`: `must_change_password`, `password_set_at`, `setup_token_hash` and `setup_token_expires_at`. Additive only. |
 | 3 | Directory Phase 3. Adds `facility_id` to `users`, `donors`, `donations`, `blood_units`, `blood_requests` and `issues`, with indexes. All existing rows go to the fictional demo facility; platform admins get none. Donor phone becomes unique **per facility**. Adds 30 triggers that make `facility_id` required and unchangeable and reject every cross-facility link. Marks the demo facility as participating. To revert, restore the verified pre-v3 backup: SQLite cannot drop a column that has a foreign key. |
 | 2 | Directory Phase 1. Adds the `facilities`, `facility_sources`, `facility_contacts` and `facility_verifications` tables and their indexes. Adds triggers so that evidence must belong to the same facility, and so the verification log is append-only. Inserts one row: a **fictional**, never-listed "Demo Blood Centre (fictional)". No real facility data is inserted. |
@@ -303,6 +309,24 @@ interval. These are software sanity limits, not clinical validation of the value
 
 Back up `bloodbank.db` before upgrading a database that holds real data:
 `python -m scripts.backup_db --label pre-upgrade`. This makes a consistent online copy in `backups/` and keeps it only if its integrity check passes and every table's row count and the schema version match the source.
+
+**Upgrading the real `bloodbank.db` to v5 (mandatory procedure).** Migrations run automatically
+whenever the app starts, so **the first start of the Phase 6 code against `bloodbank.db` applies v5**.
+Do these steps *before* that start:
+1. Stop every running instance of the app.
+2. Check the current version without changing anything:
+   `python -c "import sqlite3; print(sqlite3.connect('file:bloodbank.db?mode=ro', uri=True).execute('PRAGMA user_version').fetchone())"`
+   It should print `(4,)`.
+3. Make a verified backup: `python -m scripts.backup_db --label pre-v5`. Continue only if it reports
+   success, and note the new file name in `backups/`. Never edit or delete existing backups.
+4. Optional: record the SHA-256 of `bloodbank.db` and of the backup, so you can show later what was migrated.
+5. Start the app once. Then check that `PRAGMA user_version` is `5` and that the existing row counts
+   are unchanged.
+6. To roll back, stop the app and replace `bloodbank.db` with the `pre-v5` backup (keep the migrated
+   file first). The two new tables are additive, so a v4 database is fully usable by the Phase 5 code.
+
+The test suite checks v5 on disposable databases only (`tests/test_public_requests.py`). Migration v5
+has **not** been applied to the local `bloodbank.db`: as of 18 Nov 2026 it is still at version 4.
 
 ## 9. Haldwani facility directory (Phase 1)
 The system is being extended into a regional platform for Haldwani. Phase 1 adds a facility
@@ -538,6 +562,153 @@ belongs to exactly one facility.
   ```
   The browser history still records the link. That is acceptable because the link works once and expires.
 
+### Phase 6: availability search and public emergency requests (demonstration only)
+
+> **DEMO DATA.** Phase 6 works only with the **fictional "Demo Blood Centre"** and only when
+> `BBMS_DEMO_MODE=true`. Outside demo mode every `/demo` page returns 404. Real Haldwani facilities
+> **cannot receive requests**: the service layer allows only the demo facility, and the database rejects
+> requests to any non-participating facility. **A request never reserves or guarantees blood.**
+> In a real emergency, call **112** or **108** and contact the hospital or blood bank directly.
+
+#### 1. Availability search and its four statuses
+The real directory (`/find`) and the demo hub (`/demo`) both search by blood group and component
+(whole blood, packed red cells, platelets, fresh frozen plasma). Every facility × group × component
+combination gets exactly one status:
+
+| Status | Meaning | Quantity shown |
+|---|---|---|
+| **Available** | A **current** (unexpired, not withdrawn) report shows at least one bag. Flagged *Low* at 1–`BBMS_AVAILABILITY_LOW_MAX` bags. | Number of bags (`exact`) or "quantity not disclosed" (`banded`) |
+| **Unavailable** | A **current** report shows zero bags. | `0 bags (units)` |
+| **Stale** | The latest report has **expired**. Its time is shown with "(expired)", but its figures are not. | — |
+| **Not reported** | There is no current report: never published, withdrawn, visibility hidden, facility not participating, or the component is not tracked. | — |
+
+- **"Not reported" never means zero stock.** Missing data is never shown as zero.
+- **Whole blood only.** Packed red cells, platelets and plasma always show *Not reported*, because the
+  inventory tracks whole blood only.
+- **Ordering.** Results are sorted Available, Unavailable, Stale, Not reported.
+- **Real facilities.** None of the Haldwani facilities in the directory publishes stock through this
+  system: they are not participating and their visibility is `hidden`. On `/find` they therefore show
+  *Not reported*. This system holds **no live inventory for any real facility**. For official stock,
+  use [e-RaktKosh](https://eraktkosh.mohfw.gov.in/).
+- **Demo facility.** On the Render demo, the builder publishes the demo facility's synthetic stock with
+  exact figures. That data appears **only** on `/demo`. `/find` and `/api/public/*` never show the demo
+  facility or any request.
+
+#### 2. Public emergency request form (`/demo/request`)
+There is no sign-in. Every field is checked on the server:
+
+| Field | Rule |
+|---|---|
+| Blood centre | Must be a facility that is accepting requests (in practice, only the demo facility) |
+| Blood group | One of the eight ABO/Rh groups |
+| Component | Whole blood, packed red cells, platelets or fresh frozen plasma |
+| Units | 1–10 |
+| Required by | Date and time in IST: not in the past (10 minutes' grace) and at most 30 days ahead |
+| Location | Hospital or place, 3–150 characters |
+| Requester name | 2–120 characters |
+| Contact phone | Digits, with an optional leading `+`, spaces or dashes; stored without spaces or dashes |
+| Note | Optional, up to 500 characters |
+
+The form deliberately asks for **no patient identity**. Staff collect the patient's details, for
+example by phone, when they accept the request.
+
+Abuse controls:
+- CSRF protection, as on every form.
+- At most **5 submissions per client address per 10 minutes**.
+
+#### 3. Request reference and private tracking code
+After a successful submission, the page shows two values **once**:
+- **Request reference**, e.g. `PR-7KQ2MX`. Not secret: it identifies the request.
+- **Tracking code**: 16 characters in four groups of four (about 80 bits of randomness), from an
+  alphabet without `0/O` or `1/I` so that it can be read out over the phone.
+
+Only a **SHA-256 hash** of the tracking code is stored. It cannot be shown again or recovered. If the
+requester loses it, they must contact the blood bank directly.
+
+#### 4. Secure tracking (`/demo/track`)
+- The requester enters **both** the reference and the tracking code. Case, spaces and dashes are ignored.
+- The code is compared in constant time, even when the reference does not exist.
+- A wrong reference and a wrong code get the **same** answer: "No request matches that reference and
+  tracking code." There is no list of requests and no way to enumerate them.
+- The code is sent by POST. It never appears in a URL and is never logged.
+- Tracking pages are sent with `Cache-Control: no-store`.
+- At most **30 tracking attempts per client address per 10 minutes**.
+
+The tracking page shows:
+- the status and an explanation;
+- any message from the blood bank;
+- the facility, the units, component and group requested, the required-by time;
+- the contact number, masked except for its last three digits;
+- a timeline (received, accepted, rejected or clarification requested, medically approved, each bag issued).
+
+It never shows patient details.
+
+| Requester sees | When |
+|---|---|
+| Received | Submitted, not yet reviewed |
+| More information needed | Staff asked for clarification (the requester is told to call the blood bank) |
+| Not accepted | Staff rejected it |
+| Accepted | Accepted; the linked staff request awaits medical approval |
+| Approved | A medical officer approved it; compatible bags are reserved |
+| Partially issued / Fulfilled | Some or all units have been issued |
+| Not approved / Cancelled | The medical officer rejected the linked staff request, or staff cancelled it |
+
+After acceptance, the status follows the linked staff request. It is never stored twice.
+
+#### 5. Staff review: accept, reject, clarify (`/incoming-requests`)
+- **Who.** Any Staff, Medical Officer or Administrator of the **receiving** facility, from *Public requests* in
+  the sidebar. Another facility's requests return 404, and platform administrators have no access.
+- **Contact details.** Staff see the requester's full contact number so they can call back.
+- **Accept** (whole blood only):
+  - Staff enter the patient's name, age, gender and the request priority.
+  - In one transaction, the public request becomes **Accepted**, a normal **PENDING** staff request is
+    created and linked to it, and an audit event is recorded.
+  - Requests for other components cannot be accepted. Reject them, or ask for clarification, and direct
+    the requester to a blood bank that stocks the component.
+- **Reject** or **Ask for clarification**: requires a message of 5–500 characters, which the requester
+  sees on the tracking page.
+- **Concurrency.** Each decision is a conditional update that succeeds only while the request is still
+  open. If two staff members decide at the same time, the second is refused.
+- **Audit.** Every step is recorded in `public_request_events`. The database makes this table append-only.
+
+#### 6. After acceptance: medical approval, reservation, crossmatch and issue
+The accepted request is an ordinary staff request (see [Core workflows](#3-core-workflows)), and every
+existing rule applies unchanged:
+1. **Medical approval.** A Medical Officer or Administrator approves it, or rejects it. Staff cannot approve.
+2. **Reservation.** Approval reserves compatible, eligible bags: identical group first, then FEFO.
+3. **Crossmatch and issue.** Staff, a Medical Officer or an Administrator issues the reserved bags.
+   Each issue requires confirming that the **laboratory crossmatch** is compatible.
+4. **Tracking.** The requester's page moves through Approved, Partially issued and Fulfilled. On the
+   demo, the synthetic stock on `/demo` goes down accordingly.
+
+#### 7. Demo limitations
+- **Fictional data.** All facilities, stock and requests on `/demo` are fictional and labelled
+  **DEMO DATA**. They are erased whenever the free Render service restarts or wakes from sleep.
+- **No guarantee.** A public request **does not reserve or guarantee blood**. Only medical approval
+  reserves bags.
+- **No real facilities.** Real facilities cannot receive requests and have no live inventory here.
+- **Whole blood only.** Other components can be requested but cannot be fulfilled.
+- **Shared accounts.** All visitors use the same demo accounts, so account changes stay disabled in
+  demo mode (see [section 10a](#10a-public-demonstration-on-render-free-0)).
+- **Rate limits** are kept in memory. They reset on restart and assume a single worker
+  (`--workers 1`). Behind a proxy they depend on `--proxy-headers` and `FORWARDED_ALLOW_IPS` for
+  the client address.
+
+#### 8. No SMS or OTP
+- **No SMS, OTP, e-mail or other notification is sent.** The requester's phone number is **not verified**.
+- Requesters must check progress themselves on the tracking page.
+- Staff must call the requester to confirm identity and collect patient details.
+- Before real use, phone verification and notifications would need a separate design and review,
+  including consent, cost and data-protection review.
+
+#### 9. Demo credentials
+- **Local development** (`python -m scripts.seed`): use the accounts in
+  [Demo credentials](#demo-credentials-local-demo-only). Note: `/demo` returns 404 unless `BBMS_DEMO_MODE=true`.
+- **Render demo:** use `demo.staff` (staff), `demo.doctor` (medical officer), `demo.admin` and
+  `demo.platform`. Their passwords are **not** in this README. They are set only through
+  `BBMS_DEMO_PASSWORD_*` in the Render dashboard (see section 10a), and the instructor gives them out.
+- **Never** run the demo builder or demo mode against the local `bloodbank.db`. The builder refuses to.
+
 ## 10. Time zones
 | Data | Stored as | Shown as |
 |---|---|---|
@@ -625,7 +796,9 @@ These were found in the Phase 4 security review and are **not yet resolved**:
     and public pages alike. Only Leaflet is pinned with SRI.
   - There is no `Content-Security-Policy` or `Strict-Transport-Security` header. The app sets only
     `X-Frame-Options`, `X-Content-Type-Options` and `Referrer-Policy`.
-- **No rate limiting** on sign-in, the setup link, the public pages or the public API.
+- **No rate limiting** on sign-in, the setup link, the public pages or the public API. The only
+  exceptions are Phase 6 request submission and tracking, which have a single-process, in-memory limit.
+- **No SMS/OTP or phone verification** for public requests (see Phase 6).
 - **Backups are manual,** and there is **no restore script**. To restore, stop the app and replace
   `bloodbank.db` with a verified file from `backups/` (keep the current file first). Nothing schedules
   backups.

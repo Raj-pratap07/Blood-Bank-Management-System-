@@ -182,3 +182,17 @@ class RequestStatus(enum.StrEnum):
 
 
 OPEN_REQUEST_STATUSES = (RequestStatus.PENDING, RequestStatus.APPROVED, RequestStatus.PARTIALLY_ISSUED)
+
+
+class PublicRequestStatus(enum.StrEnum):
+    """Stored state of a PUBLIC (anonymous) blood request. Once accepted, progress comes from the linked
+    staff BloodRequest (medical approval, reservation, issue), so it is never duplicated here."""
+    SUBMITTED = "submitted"
+    CLARIFICATION_REQUESTED = "clarification_requested"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+
+
+# Components a member of the public can search for or request. Only whole blood has inventory (TRACKED_PRODUCTS);
+# the others always show "Not reported" and cannot be fulfilled through the inventory workflow.
+REQUESTABLE_PRODUCTS = (Product.WHOLE_BLOOD, Product.PACKED_RED_CELLS, Product.PLATELETS, Product.FRESH_FROZEN_PLASMA)

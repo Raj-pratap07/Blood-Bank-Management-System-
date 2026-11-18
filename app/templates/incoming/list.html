@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m with context %}
+{% block title %}Public requests{% endblock %}
+{% block content %}
+{% call m.page_header("Public requests", "Anonymous emergency requests sent to your blood bank") %}{% endcall %}
+<p class="small text-muted">A public request does not reserve blood. Accepting one creates a normal request that still needs
+  medical approval, reservation and crossmatch-confirmed issue.</p>
+<div class="card"><div class="table-responsive">
+<table class="table table-sm align-middle mb-0">
+  <thead><tr><th>Reference</th><th>Received</th><th>Group</th><th>Component</th><th>Units</th><th>Required by</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for r in reqs %}{% set st = status_of(r) %}
+  <tr>
+    <td><a href="/incoming-requests/{{ r.id }}">{{ r.reference }}</a>{% if r.facility.is_demo %} <span class="badge text-bg-warning">DEMO</span>{% endif %}</td>
+    <td>{{ r.created_at | dt }}</td><td>{{ r.blood_group.value }}</td><td>{{ r.product.label }}</td><td>{{ r.units }}</td>
+    <td>{{ r.required_by | dt }}</td><td data-status="{{ st.key }}">{{ st.label }}</td>
+  </tr>
+  {% else %}{{ m.empty(7, "No public requests.") }}{% endfor %}
+  </tbody>
+</table>
+</div></div>
+{% endblock %}

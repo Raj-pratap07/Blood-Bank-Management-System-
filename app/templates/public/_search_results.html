@@ -1,0 +1,26 @@
+{# Availability search results. Every row: facility, group, component, quantity + unit, last update, data type.
+   Statuses: Available / Unavailable (current report) - Stale (expired report) - Not reported (no current report).
+   Missing data is never shown as zero stock. #}
+{% set badge = {'available': 'pub-chip-ok', 'unavailable': 'pub-chip-muted', 'stale': 'pub-chip-warn', 'not_reported': 'pub-chip-muted'} %}
+{% set label = {'available': 'Available', 'unavailable': 'Unavailable', 'stale': 'Stale', 'not_reported': 'Not reported'} %}
+<div class="table-responsive">
+<table class="table table-sm small align-middle mb-2 pub-search-results">
+  <thead><tr><th>Blood bank</th><th>Group</th><th>Component</th><th>Status</th><th>Quantity</th><th>Last updated</th><th>Data</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr data-status="{{ r.status }}">
+    <td>{% if r.facility_slug %}<a href="/find/{{ r.facility_slug }}">{{ r.facility_name }}</a>{% else %}{{ r.facility_name }}{% endif %}</td>
+    <td>{{ r.blood_group }}</td>
+    <td>{{ r.product_label }}</td>
+    <td><span class="pub-chip {{ badge[r.status] }}">{{ label[r.status] }}{% if r.low %} (low){% endif %}</span></td>
+    <td>{{ r.quantity_text }}</td>
+    <td>{% if r.updated_at %}{{ r.updated_at | ist }}{% if r.status == 'stale' %} (expired){% endif %}{% else %}No current report{% endif %}</td>
+    <td>{% if r.is_demo %}<span class="badge text-bg-warning">DEMO DATA</span>{% else %}<span class="badge text-bg-light border">Real facility</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="small text-muted mb-0"><i class="bi bi-exclamation-triangle"></i> "Not reported" means no current report exists. It never
+  means zero stock. Only whole blood is tracked here; packed red cells, platelets and plasma are always "Not reported".
+  Availability is not a reservation. Always call the blood bank before travelling.</p>
